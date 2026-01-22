@@ -655,7 +655,7 @@ static int __fastcall Script_RemapMountDisplayID(void *L) {
 
 static int __fastcall Script_SetUnitVisibleItemID(void *L) {
     if (!Game::Lua::IsString(L, 1) || !Game::Lua::IsNumber(L, 2)) {
-        Game::Lua::Error(L, "Usage: SetUnitVisibleItemID(unitToken, inventorySlot [, displayID])");
+        Game::Lua::Error(L, "Usage: SetUnitVisibleItemID(unitToken, inventorySlot [, itemID])");
         return 0;
     }
 
@@ -705,7 +705,7 @@ static int __fastcall Script_SetUnitVisibleItemID(void *L) {
 static int __fastcall Script_RemapVisibleItemID(void *L) {
     if (!(Game::Lua::IsNumber(L, 1) || Game::Lua::IsTable(L, 1)) || !Game::Lua::IsNumber(L, 2)) {
         Game::Lua::Error(
-            L, "Usage: RemapVisibleItemID(oldDisplayID(s), inventorySlot [, newDisplayID])");
+            L, "Usage: RemapVisibleItemID(oldItemID(s), inventorySlot [, newItemID])");
         return 0;
     }
 
@@ -725,7 +725,7 @@ static int __fastcall Script_RemapVisibleItemID(void *L) {
 
     if (oldIds.empty()) {
         Game::Lua::Error(
-            L, "Usage: RemapVisibleItemID(oldDisplayID(s), inventorySlot, [, newDisplayID])");
+            L, "Usage: RemapVisibleItemID(oldItemID(s), inventorySlot, [, newItemID])");
         return 0;
     }
 
