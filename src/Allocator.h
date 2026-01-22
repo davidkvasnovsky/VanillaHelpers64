@@ -14,5 +14,6 @@
 namespace Allocator {
 
 void Initialize();
+bool InstallHooks();
 
 } // namespace Allocator

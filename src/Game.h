@@ -1113,6 +1113,10 @@ using CGGameUI_Shutdown_t = void(__fastcall *)();
 using DBCache_ItemStats_C_GetRecord_t =
     Game::ItemStats_C *(__thiscall *)(void *dbCache, uint32_t itemID, const uint64_t *guid,
                                       void *callback, void *userData, bool requestIfMissing);
+using SMemAllocInternal_t = void *(__thiscall *)(void *thisptr, uint32_t sizeClass, uint32_t size,
+                                                 uint32_t commit);
+using SMemReallocInternal_t = void *(__thiscall *)(void *thisptr, void *blk, uint32_t sizeClass,
+                                                   uint32_t size);
 
 extern const FrameScript_RegisterFunction_t FrameScript_RegisterFunction;
 extern const GetGUIDFromName_t GetGUIDFromName;
