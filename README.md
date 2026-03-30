@@ -1,6 +1,8 @@
-# VanillaHelpers
+# VanillaHelpers64
 
 This is a helper library for Vanilla WoW 1.12 that provides additional functionality.
+
+Based on VanillaHelpers, it adds a 64-bit Texture Streaming server to handle out-of-memory crashes with HD texture packs.
 
 ## Installation
 
