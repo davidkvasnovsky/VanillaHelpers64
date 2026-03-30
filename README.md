@@ -1,4 +1,4 @@
-# VanillaHelpers64
+# VanillaHelpers64 - WIP
 
 This is a helper library for Vanilla WoW 1.12 that provides additional functionality.
 
