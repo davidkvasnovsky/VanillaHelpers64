@@ -1,59 +1,144 @@
-# VanillaHelpers64 - WIP
+# VanillaHelpers64
+ 
+ VanillaHelpers64 is a helper library for Vanilla WoW 1.12 that provides additional functionality.
+ 
+ Based on **[VanillaHelpers v1.1.2](https://github.com/isfir/VanillaHelpers)**, it adds a **64-bit texture streaming server** to reduce out-of-memory 
+crashes with HD texture packs by moving heavy texture residency pressure out of the 32-bit WoW client.
+ 
+ This is intended to be a stand-in replacement for VanillaHelpers.
+ 
+ ## What is new in VanillaHelpers64
+ 
+ VanillaHelpers64 adds a companion **64-bit TextureServer** and a WoW-side texture bridge that:
+ 
+ - intercepts selected texture loads
+ - caches texture data in a 64-bit helper process
+ - swaps many heavy textures from `D3DPOOL_MANAGED` to `D3DPOOL_DEFAULT`
+ - reuploads textures on demand instead of keeping large managed system-memory copies inside WoW
+ - helps reduce OOM pressure in crowded cities and heavy HD texture scenes
+ 
+ Current implementation focus:
+ 
+ - large DXT textures
+ - selected large world doodads, buildings, creatures, character assets, capes, shoulders, and weapons
+ - expanding support for large uncompressed textures in targeted asset groups
+ 
+ ## Installation
+ 
+ It is recommended to use **[VanillaFixes](https://github.com/hannesmann/vanillafixes)** to load this mod.
+ 
+ Steps:
+ 
+ 1. Install VanillaFixes if not already installed
+ 2. Copy `VanillaHelpers.dll` to your game directory
+ 3. Copy `TextureServer64.exe` to your game directory
+ 4. Add `VanillaHelpers.dll` to the `dlls.txt` file
+ 5. Start the game with 'WoW.exe'
+ 
+ 
+ ## Features
+ 
+ - **File Operations:** Read/write files from the game's environment
+ - **Minimap Blips:** Customize unit markers on the minimap
+ - **Memory Allocator:** Double the custom allocator's region size from 16 MiB to 32 MiB (128 regions), 
+raising allocator capacity from 2 GiB to 4 GiB
+ - **High-Resolution Textures:** Increase the maximum supported texture size to 1024x1024 (from 512x512)
+ - **High-Resolution Character Skins:** Support up to 4x higher-resolution skin and armor textures
+ - **Character Morph:** Change character appearances, mounts, and visible items
+ - **64-bit Texture Streaming:** Use a 64-bit companion server to cache and stream selected HD textures 
+with lower 32-bit WoW memory pressure
 
-This is a helper library for Vanilla WoW 1.12 that provides additional functionality.
+ ## TextureServer64
+ 
+ `TextureServer64.exe` is the 64-bit companion process used by VanillaHelpers64 to keep heavy texture work
+ and cache pressure outside the 32-bit WoW client.
+ 
+ ### What it does
+ 
+ - receives texture requests from `VanillaHelpers.dll`
+ - decodes supported BLP/TGA texture data
+ - keeps decoded texture payloads in a 64-bit LRU cache
+ - exposes decoded textures to the WoW client through shared memory slots
+ - serves as the backing source for re-uploading `D3DPOOL_DEFAULT` textures after eviction or cache loss
+ 
+ ### Why it exists
+ 
+ WoW 1.12 is a 32-bit process, so large HD texture packs can exhaust its address space even when the 
+machine still has plenty of RAM available.
+ 
+ TextureServer64 moves the heavy texture cache into a 64-bit process, where much larger caches are 
+possible without pushing WoW toward OOM.
+ 
+ ### Current behavior
+ 
+ - targeted textures are sent to the server when intercepted by the helper
+ - the server returns decoded texture payloads through shared memory
+ - the helper can replace selected managed textures with `D3DPOOL_DEFAULT` textures in WoW
+ - if the server has evicted a cached texture, the helper can now recover by re-reading the raw asset and 
+re-requesting it
+ 
+ ### Cache sizing
+ 
+ By default, TextureServer64 now auto-sizes its cache to:
+ 
+ - **35% of physical RAM**
+ - **minimum 4 GiB**
+ - **maximum 32 GiB**
 
-Based on VanillaHelpers, it adds a 64-bit Texture Streaming server to handle out-of-memory crashes with HD texture packs.
+ -  You can still override this manually with: --cache-mb N
 
-This will be a stand-in replacement to VanillaHelpers.
+    Command line
 
-## Installation
+   TextureServer64.exe [--threads N] [--cache-mb N] [--visible]
 
-It is recommended to use [VanillaFixes](https://github.com/hannesmann/vanillafixes) to load this mod.
+   - --threads N - worker thread count (0 = auto)
+   - --cache-mb N - manual cache size override in MiB
+   - --visible - keep the console open for live server logging
 
-**Steps:**
+  Notes
 
-1. Install `VanillaFixes` if not already installed
-2. Copy `VanillaHelpers.dll` to your game directory
-3. Add `VanillaHelpers.dll` to the `dlls.txt` file
-4. Start the game with `VanillaFixes.exe`
+   - the server is primarily a texture cache and upload source, not a renderer
+   - the biggest current benefit is reducing 32-bit texture residency pressure in WoW
+   - performance gains are more about avoiding memory-related stalls and crashes than raw FPS increases
 
-**Note:** While it might be possible to use a popular private server client modification to load the DLL, this method is not recommended. The way that client loads DLLs is inferior and may introduce bugs. VanillaFixes loads the DLL before any game code is run, which is more reliable. Some bugs that occurred when loaded by the other method have been fixed, but there is no guarantee that all issues will be addressed, especially if they are not easy to resolve.
+ ## Usage
+ 
+ The library registers these Lua functions:
+ 
+ - `WriteFile(filename, mode, content)`
+ - `content = ReadFile(filename)`
+ - `SetUnitBlip(unit [, texture [, scale]])`
+ - `SetObjectTypeBlip(type [, texture [, scale]])`
+ - `SetUnitDisplayID(unitToken [, displayID])`
+ - `RemapDisplayID(oldDisplayID(s) [, newDisplayID])`
+ - `SetUnitMountDisplayID(unitToken [, mountDisplayID])`
+ - `RemapMountDisplayID(oldDisplayID(s) [, factionIndexedDisplayIDs])`
+ - `SetUnitVisibleItemID(unitToken, inventorySlot [, itemID])`
+ - `RemapVisibleItemID(oldItemID(s), inventorySlot [, newItemID])`
+ - `displayID, nativeDisplayID, mountDisplayID = UnitDisplayInfo(unitToken)`
+ - `itemDisplayID = GetItemDisplayID(itemID)`
+ 
+ To enable higher-resolution character skins, add a text file at `VanillaHelpers/ResizeCharacterSkin.txt` 
+inside your MPQ. The file should contain a single number: `2` or `4` (the scale multiplier).
 
-## Features
-
-- **File Operations**: Read/write files from the game's environment
-- **Minimap Blips**: Customize unit markers on the minimap
-- **Memory Allocator**: Double the custom allocator's region size from 16 MiB to 32 MiB (128 regions), raising allocator capacity from 2 GiB to 4 GiB
-- **High-Resolution Textures**: Increase the maximum supported texture size to 1024x1024 (from 512x512)
-- **High-Resolution Character Skins**: Support up to 4x higher-resolution skin and armor textures
-- **Character Morph**: Change character appearances, mounts, and visible items
-
-## Usage
-
-The library registers these Lua functions:
-
-```lua
-WriteFile(filename, mode, content)
-content = ReadFile(filename)
-SetUnitBlip(unit [, texture [, scale]])
-SetObjectTypeBlip(type [, texture [, scale]])
-SetUnitDisplayID(unitToken [, displayID])
-RemapDisplayID(oldDisplayID(s) [, newDisplayID])
-SetUnitMountDisplayID(unitToken [, mountDisplayID])
-RemapMountDisplayID(oldDisplayID(s) [, factionIndexedDisplayIDs])
-SetUnitVisibleItemID(unitToken, inventorySlot [, itemID])
-RemapVisibleItemID(oldItemID(s), inventorySlot [, newItemID])
-displayID, nativeDisplayID, mountDisplayID = UnitDisplayInfo(unitToken)
-itemDisplayID = GetItemDisplayID(itemID)
-```
-
-To enable higher-resolution character skins, add a text file at VanillaHelpers/ResizeCharacterSkin.txt inside your MPQ. The file should contain a single number: 2 or 4 (the scale multiplier).
-
-See the source code for implementation details.
-
-## Memory Usage Note
-
-When using high-resolution textures, particularly 4x character skins, the game will use significantly more RAM and might run out of memory in crowded areas. To help avoid this, it is recommended to run the game on a 64-bit operating system and use DXVK. Additionally, ensure the game executable is Large Address Aware (LAA) flagged to access more than 2GB of RAM (note that the popular private server client already has this flag set).
-
-If running on Linux, it's recommended to use a Wine build with WoW64 mode and apply [this patch](https://bugs.winehq.org/attachment.cgi?id=75848) to make more addresses available in the 32-bit address space.
-
+ To keep the TextureServer64 console window visible, add an empty file named 'TexBridgeVisible.txt' in WoW folder.
+ 
+ See the source code for implementation details.
+ 
+ ## Memory Usage Note
+ 
+ When using high-resolution textures, particularly 4x character skins, the game will use significantly 
+more RAM and might run out of memory in crowded areas.
+ 
+ VanillaHelpers64 is intended to improve this by offloading selected texture caching and residency 
+handling to a 64-bit companion process, but it is still a work in progress and does not yet eliminate all 
+memory pressure cases.
+ 
+ To further reduce issues, it is recommended to:
+ 
+ - run the game on a 64-bit operating system
+ - use DXVK
+ - ensure the game executable is Large Address Aware (LAA) flagged to access more than 2GB of RAM
+ 
+ If running on Linux, it's recommended to use a Wine build with WoW64 mode and apply the usual 
+address-space patch to make more addresses available in the 32-bit address space.
