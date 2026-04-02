@@ -154,8 +154,10 @@ swapped texture
  To enable higher-resolution character skins, add a text file at `VanillaHelpers/ResizeCharacterSkin.txt` 
 inside your MPQ. The file should contain a single number: `2` or `4` (the scale multiplier).
  
- To keep the TextureServer64 console window visible, add an empty file named `TexBridgeVisible.txt` in the
- WoW folder.
+ **To keep the TextureServer64 console window visible, add an empty file named `TexBridgeVisible.txt` in the
+ WoW folder.**
+
+** To output a fully detailed log, add an empty file named'TexBridgeFullLog.txt' in the WoW folder.**
  
  See the source code for implementation details.
  
