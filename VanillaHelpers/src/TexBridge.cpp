@@ -320,7 +320,7 @@ static SRWLOCK s_defaultPoolLock = SRWLOCK_INIT;
 static std::list<DefaultPoolEntry> s_defaultPoolLru;
 static std::unordered_map<uintptr_t, std::list<DefaultPoolEntry>::iterator> s_defaultPoolMap;
 static size_t s_defaultPoolBytes = 0;
-static constexpr size_t DEFAULT_POOL_BUDGET_BYTES = 256u * 1024u * 1024u;
+static constexpr size_t DEFAULT_POOL_BUDGET_BYTES = 768u * 1024u * 1024u;
 
 // ══════════════════════════════════════════════════════════════════════
 //  Phase 2: Texture Memory Tracking & Struct Discovery
