@@ -30,7 +30,7 @@ crashes with HD texture packs by moving heavy texture residency pressure out of 
  Steps:
  
  1. Install VanillaFixes if not already installed
- 2. Download lates release from [Releases](https://github.com/paokkerkir/VanillaHelpers64/releases)
+ 2. Download latest release from [Releases](https://github.com/paokkerkir/VanillaHelpers64/releases)
  3. Copy `VanillaHelpers.dll` to your game directory
  4. Copy `TextureServer64.exe` to your game directory
  5. Add `VanillaHelpers.dll` to the `dlls.txt` file
