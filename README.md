@@ -19,7 +19,7 @@ crashes with HD texture packs by moving heavy texture residency pressure out of 
  
  Current implementation focus:
  
- - large DXT textures
+ - large DXT textures (512x256 and above)
  - selected large world doodads, buildings, creatures, character assets, capes, shoulders, and weapons
  - expanding support for large uncompressed textures in targeted asset groups
  
