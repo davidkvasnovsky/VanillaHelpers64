@@ -55,6 +55,7 @@ raising allocator capacity from 2 GiB to 4 GiB
  - **Character Morph:** Change character appearances, mounts, and visible items
  - **64-bit Texture Streaming:** Use a 64-bit companion server to cache and stream selected HD textures 
 with lower 32-bit WoW memory pressure
+ - **Shutdown crash dump fix** 
  
  ## TextureServer64
  
