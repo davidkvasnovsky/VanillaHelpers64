@@ -100,7 +100,8 @@ re-requesting it
    - the server is primarily a texture cache and upload source, not a renderer
    - the biggest current benefit is reducing 32-bit texture residency pressure in WoW
    - performance gains are more about avoiding memory-related stalls and crashes than raw FPS increases
-
+   - textureserver writes a log in WoW folder, TexBridge.log.
+     
  ## Usage
  
  The library registers these Lua functions:
