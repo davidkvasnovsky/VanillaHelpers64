@@ -300,6 +300,9 @@ static volatile LONG s_stat_bp_rejects = 0;
 static volatile LONG s_stat_pool_misses = 0;
 static volatile LONG s_stat_default_swaps = 0;
 static volatile LONG s_stat_default_evictions = 0;
+static volatile LONG s_stat_default_reuploads = 0;
+static volatile LONG64 s_stat_default_swapped_bytes = 0;
+static volatile LONG64 s_stat_default_evicted_bytes = 0;
 
 // Prefetch tracking
 static constexpr int PREFETCH_HISTORY = 32;
@@ -320,6 +323,7 @@ static SRWLOCK s_defaultPoolLock = SRWLOCK_INIT;
 static std::list<DefaultPoolEntry> s_defaultPoolLru;
 static std::unordered_map<uintptr_t, std::list<DefaultPoolEntry>::iterator> s_defaultPoolMap;
 static size_t s_defaultPoolBytes = 0;
+static size_t s_defaultPoolPeakBytes = 0;
 static constexpr size_t DEFAULT_POOL_BUDGET_BYTES = 768u * 1024u * 1024u;
 
 // ══════════════════════════════════════════════════════════════════════
@@ -512,6 +516,7 @@ static void EvictDefaultPoolToBudget() {
     while (s_defaultPoolBytes > DEFAULT_POOL_BUDGET_BYTES && !s_defaultPoolLru.empty()) {
         auto &entry = s_defaultPoolLru.back();
         ReleaseD3DTexture(entry.default_tex);
+        InterlockedExchangeAdd64(&s_stat_default_evicted_bytes, entry.size_bytes);
         if (entry.size_bytes <= s_defaultPoolBytes)
             s_defaultPoolBytes -= entry.size_bytes;
         else
@@ -534,11 +539,14 @@ static void TrackDefaultPoolTexture(uintptr_t textureKey, uint64_t pathHash,
         it->second->path_hash = pathHash;
         s_defaultPoolBytes += sizeBytes;
         s_defaultPoolLru.splice(s_defaultPoolLru.begin(), s_defaultPoolLru, it->second);
+        InterlockedIncrement(&s_stat_default_reuploads);
     } else {
         s_defaultPoolLru.push_front(DefaultPoolEntry{textureKey, pathHash, defaultTex, sizeBytes});
         s_defaultPoolMap[textureKey] = s_defaultPoolLru.begin();
         s_defaultPoolBytes += sizeBytes;
     }
+    if (s_defaultPoolBytes > s_defaultPoolPeakBytes)
+        s_defaultPoolPeakBytes = s_defaultPoolBytes;
     ReleaseSRWLockExclusive(&s_defaultPoolLock);
     EvictDefaultPoolToBudget();
 }
@@ -1140,9 +1148,12 @@ static bool TrySwapToDefaultPool(Game::HTEXTURE__ *texture, Game::CGxTex *gxTex,
     ReleaseD3DTexture(managedTex);
     ReleaseSlot(info.slot);
 
+    uint32_t trackedBytes = ComputeTextureBytes(info.width, info.height, info.format,
+                                                static_cast<uint8_t>(levels));
     TrackDefaultPoolTexture(reinterpret_cast<uintptr_t>(texture), pathHash, defaultTex,
-                           ComputeTextureBytes(info.width, info.height, info.format, static_cast<uint8_t>(levels)));
+                           trackedBytes);
     InterlockedIncrement(&s_stat_default_swaps);
+    InterlockedExchangeAdd64(&s_stat_default_swapped_bytes, trackedBytes);
     LogWrite("DEFAULT_SWAP: '%s' %ux%u fmt=%u mips=%u",
              path, info.width, info.height, info.format, levels);
     return true;
@@ -1633,6 +1644,14 @@ void Shutdown() {
     LogWrite("Shutdown: D3D managed textures=%ld total_system_mem=%lld MB",
              static_cast<long>(s_total_d3d_managed_count),
              static_cast<long long>(s_total_d3d_managed_bytes / (1024 * 1024)));
+    LogWrite("Shutdown: defaultPool current=%llu MB peak=%llu MB budget=%llu MB "
+             "swapped=%llu MB evicted=%llu MB swaps=%ld evictions=%ld reuploads=%ld",
+             static_cast<unsigned long long>(s_defaultPoolBytes / (1024ULL * 1024ULL)),
+             static_cast<unsigned long long>(s_defaultPoolPeakBytes / (1024ULL * 1024ULL)),
+             static_cast<unsigned long long>(DEFAULT_POOL_BUDGET_BYTES / (1024ULL * 1024ULL)),
+             static_cast<unsigned long long>(s_stat_default_swapped_bytes / (1024ULL * 1024ULL)),
+             static_cast<unsigned long long>(s_stat_default_evicted_bytes / (1024ULL * 1024ULL)),
+             s_stat_default_swaps, s_stat_default_evictions, s_stat_default_reuploads);
 
     LogWrite("Shutdown: complete. Stats: intercepted=%ld queued=%ld done=%ld "
              "cacheHits=%ld syncFallback=%ld bpRejects=%ld poolMisses=%ld",
