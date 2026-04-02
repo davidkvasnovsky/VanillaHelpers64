@@ -10,6 +10,7 @@
 #include <windows.h>
 
 #include "../../shared/Protocol.h"
+#include <array>
 
 namespace TexServer {
 
@@ -54,8 +55,10 @@ public:
     void FreeSlot(int32_t slot);
 
 private:
-    HANDLE  m_hMapping = nullptr;
-    uint8_t* m_pBase   = nullptr;
+    HANDLE   m_hHeaderMapping = nullptr;
+    uint8_t* m_pHeaderBase    = nullptr;
+    std::array<HANDLE, TexProto::SHM_WINDOW_COUNT>  m_hDataMappings{};
+    std::array<uint8_t*, TexProto::SHM_WINDOW_COUNT> m_pDataBases{};
 };
 
 } // namespace TexServer

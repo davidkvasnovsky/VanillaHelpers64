@@ -1,6 +1,7 @@
 #include "SharedMemory.h"
 
 #include <cstring>
+#include <string>
 
 namespace TexServer {
 
@@ -10,39 +11,65 @@ SharedMemory::~SharedMemory() {
 
 bool SharedMemory::Create() {
     // Avoid double-create.
-    if (m_pBase) return false;
+    if (m_pHeaderBase) return false;
 
-    // SHM_TOTAL_SIZE can exceed 4 GiB, so split into high/low DWORD.
-    DWORD sizeHigh = static_cast<DWORD>(TexProto::SHM_TOTAL_SIZE >> 32);
-    DWORD sizeLow  = static_cast<DWORD>(TexProto::SHM_TOTAL_SIZE & 0xFFFFFFFF);
-
-    m_hMapping = CreateFileMappingA(
+    m_hHeaderMapping = CreateFileMappingA(
         INVALID_HANDLE_VALUE,   // backed by system paging file
         nullptr,                // default security
         PAGE_READWRITE,
-        sizeHigh,
-        sizeLow,
+        0,
+        TexProto::SHM_HEADER,
         TexProto::SHM_NAME
     );
 
-    if (!m_hMapping) return false;
+    if (!m_hHeaderMapping) return false;
 
-    m_pBase = static_cast<uint8_t*>(MapViewOfFile(
-        m_hMapping,
+    m_pHeaderBase = static_cast<uint8_t*>(MapViewOfFile(
+        m_hHeaderMapping,
         FILE_MAP_ALL_ACCESS,
         0, 0,
         0  // map entire object
     ));
 
-    if (!m_pBase) {
-        CloseHandle(m_hMapping);
-        m_hMapping = nullptr;
+    if (!m_pHeaderBase) {
+        CloseHandle(m_hHeaderMapping);
+        m_hHeaderMapping = nullptr;
         return false;
     }
 
-    // Zero the entire region (MapViewOfFile from the paging file is
-    // zero-initialized by Windows, but be explicit for clarity).
-    std::memset(m_pBase, 0, static_cast<size_t>(TexProto::SHM_TOTAL_SIZE));
+    std::memset(m_pHeaderBase, 0, TexProto::SHM_HEADER);
+
+    for (uint32_t window = 0; window < TexProto::SHM_WINDOW_COUNT; ++window) {
+        const std::string mappingName = std::string(TexProto::SHM_DATA_NAME_PREFIX) + std::to_string(window);
+        DWORD sizeHigh = static_cast<DWORD>(TexProto::SHM_DATA_WINDOW_SIZE >> 32);
+        DWORD sizeLow  = static_cast<DWORD>(TexProto::SHM_DATA_WINDOW_SIZE & 0xFFFFFFFF);
+
+        m_hDataMappings[window] = CreateFileMappingA(
+            INVALID_HANDLE_VALUE,
+            nullptr,
+            PAGE_READWRITE,
+            sizeHigh,
+            sizeLow,
+            mappingName.c_str()
+        );
+        if (!m_hDataMappings[window]) {
+            Destroy();
+            return false;
+        }
+
+        m_pDataBases[window] = static_cast<uint8_t*>(MapViewOfFile(
+            m_hDataMappings[window],
+            FILE_MAP_ALL_ACCESS,
+            0, 0,
+            0
+        ));
+        if (!m_pDataBases[window]) {
+            Destroy();
+            return false;
+        }
+
+        std::memset(m_pDataBases[window], 0, static_cast<size_t>(TexProto::SHM_DATA_WINDOW_SIZE));
+    }
 
     // Initialize the global header.
     auto* hdr = GetHeader();
@@ -58,52 +85,62 @@ bool SharedMemory::Create() {
 }
 
 void SharedMemory::Destroy() {
-    if (m_pBase) {
-        UnmapViewOfFile(m_pBase);
-        m_pBase = nullptr;
+    for (uint32_t window = 0; window < TexProto::SHM_WINDOW_COUNT; ++window) {
+        if (m_pDataBases[window]) {
+            UnmapViewOfFile(m_pDataBases[window]);
+            m_pDataBases[window] = nullptr;
+        }
+        if (m_hDataMappings[window]) {
+            CloseHandle(m_hDataMappings[window]);
+            m_hDataMappings[window] = nullptr;
+        }
     }
-    if (m_hMapping) {
-        CloseHandle(m_hMapping);
-        m_hMapping = nullptr;
+
+    if (m_pHeaderBase) {
+        UnmapViewOfFile(m_pHeaderBase);
+        m_pHeaderBase = nullptr;
+    }
+    if (m_hHeaderMapping) {
+        CloseHandle(m_hHeaderMapping);
+        m_hHeaderMapping = nullptr;
     }
 }
 
 bool SharedMemory::IsValid() const {
-    return m_pBase != nullptr;
+    return m_pHeaderBase != nullptr;
 }
 
 TexProto::ShmHeader* SharedMemory::GetHeader() {
-    if (!m_pBase) return nullptr;
-    return reinterpret_cast<TexProto::ShmHeader*>(m_pBase);
+    if (!m_pHeaderBase) return nullptr;
+    return reinterpret_cast<TexProto::ShmHeader*>(m_pHeaderBase);
 }
 
 TexProto::SlotHeader* SharedMemory::GetSlotHeader(int32_t slot) {
-    if (!m_pBase || slot < 0 || slot >= static_cast<int32_t>(TexProto::SLOT_COUNT))
+    if (!m_pHeaderBase || slot < 0 || slot >= static_cast<int32_t>(TexProto::SLOT_COUNT))
         return nullptr;
 
-    // Layout: [ShmHeader (4096 bytes)] [slot0 (SLOT_TOTAL)] [slot1] ...
-    // Each slot starts at: SHM_HEADER + slot * SLOT_TOTAL
-    uint8_t* slotBase = m_pBase
-        + TexProto::SHM_HEADER
-        + static_cast<uint64_t>(slot) * TexProto::SLOT_TOTAL;
+    const uint32_t window = static_cast<uint32_t>(slot) / TexProto::SLOTS_PER_WINDOW;
+    const uint32_t slotInWindow = static_cast<uint32_t>(slot) % TexProto::SLOTS_PER_WINDOW;
+    uint8_t* slotBase = m_pDataBases[window]
+        + static_cast<uint64_t>(slotInWindow) * TexProto::SLOT_TOTAL;
 
     return reinterpret_cast<TexProto::SlotHeader*>(slotBase);
 }
 
 uint8_t* SharedMemory::GetSlotData(int32_t slot) {
-    if (!m_pBase || slot < 0 || slot >= static_cast<int32_t>(TexProto::SLOT_COUNT))
+    if (!m_pHeaderBase || slot < 0 || slot >= static_cast<int32_t>(TexProto::SLOT_COUNT))
         return nullptr;
 
-    // Data region starts SLOT_HEADER bytes after the slot base.
-    uint8_t* slotBase = m_pBase
-        + TexProto::SHM_HEADER
-        + static_cast<uint64_t>(slot) * TexProto::SLOT_TOTAL;
+    const uint32_t window = static_cast<uint32_t>(slot) / TexProto::SLOTS_PER_WINDOW;
+    const uint32_t slotInWindow = static_cast<uint32_t>(slot) % TexProto::SLOTS_PER_WINDOW;
+    uint8_t* slotBase = m_pDataBases[window]
+        + static_cast<uint64_t>(slotInWindow) * TexProto::SLOT_TOTAL;
 
     return slotBase + TexProto::SLOT_HEADER;
 }
 
 int32_t SharedMemory::AllocateSlot() {
-    if (!m_pBase) return -1;
+    if (!m_pHeaderBase) return -1;
 
     for (int32_t i = 0; i < static_cast<int32_t>(TexProto::SLOT_COUNT); ++i) {
         auto* sh = GetSlotHeader(i);

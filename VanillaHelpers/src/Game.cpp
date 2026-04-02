@@ -39,8 +39,12 @@ const ClntObjMgrObjectPtr_t ClntObjMgrObjectPtr =
     reinterpret_cast<ClntObjMgrObjectPtr_t>(Offsets::FUN_CLNT_OBJ_MGR_OBJECT_PTR);
 const RenderObjectBlips_t RenderObjectBlips =
     reinterpret_cast<RenderObjectBlips_t>(Offsets::FUN_RENDER_OBJECT_BLIP);
+const GxTexOwnerUpdate_t GxTexOwnerUpdate =
+    reinterpret_cast<GxTexOwnerUpdate_t>(Offsets::FUN_GX_TEX_OWNER_UPDATE);
 const TextureGetGxTex_t TextureGetGxTex =
     reinterpret_cast<TextureGetGxTex_t>(Offsets::FUN_TEXTURE_GET_GX_TEX);
+const TextureDestroy_t TextureDestroy =
+    reinterpret_cast<TextureDestroy_t>(Offsets::FUN_TEXTURE_DESTROY);
 const GxRsSet_t GxRsSet = reinterpret_cast<GxRsSet_t>(Offsets::FUN_GX_RS_SET);
 const GxPrimLockVertexPtrs_t GxPrimLockVertexPtrs =
     reinterpret_cast<GxPrimLockVertexPtrs_t>(Offsets::FUN_GX_PRIM_LOCK_VERTEX_PTRS);

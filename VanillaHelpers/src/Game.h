@@ -1057,7 +1057,9 @@ using ClntObjMgrObjectPtr_t = CGObject_C *(__fastcall *)(uint32_t typeMask,
                                                          const char *debugMessage, uint64_t guid,
                                                          int debugCode);
 using RenderObjectBlips_t = void(__thiscall *)(CGMinimapFrame *thisptr, DNInfo *dnInfo);
+using GxTexOwnerUpdate_t = int(__thiscall *)(void *pThis, void *entry);
 using TextureGetGxTex_t = CGxTex *(__fastcall *)(HTEXTURE__ * texture, int, CStatus *status);
+using TextureDestroy_t = void(__cdecl *)();
 using GxRsSet_t = void(__fastcall *)(EGxRenderState, CGxTex *);
 using GxPrimLockVertexPtrs_t = void(__fastcall *)(uint32_t, C3Vector *, uint32_t, C3Vector *,
                                                   uint32_t, const CImVector *, uint32_t,
@@ -1122,7 +1124,9 @@ extern const FrameScript_RegisterFunction_t FrameScript_RegisterFunction;
 extern const GetGUIDFromName_t GetGUIDFromName;
 extern const ClntObjMgrObjectPtr_t ClntObjMgrObjectPtr;
 extern const RenderObjectBlips_t RenderObjectBlips;
+extern const GxTexOwnerUpdate_t GxTexOwnerUpdate;
 extern const TextureGetGxTex_t TextureGetGxTex;
+extern const TextureDestroy_t TextureDestroy;
 extern const GxRsSet_t GxRsSet;
 extern const GxPrimLockVertexPtrs_t GxPrimLockVertexPtrs;
 extern const GxPrimDrawElements_t GxPrimDrawElements;

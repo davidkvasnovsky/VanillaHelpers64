@@ -18,6 +18,15 @@ static bool EndsWith(const std::string& str, const std::string& suffix) {
         });
 }
 
+static std::string NormalizePathKey(const std::string& path) {
+    std::string key = path;
+    std::transform(key.begin(), key.end(), key.begin(), [](unsigned char c) {
+        if (c == '/') return '\\';
+        return static_cast<char>(std::tolower(c));
+    });
+    return key;
+}
+
 // ── Construction / destruction ─────────────────────────────────────────────
 
 Server::Server(const ServerConfig& config)
@@ -33,9 +42,15 @@ Server::~Server() {
 // ── Lifecycle ──────────────────────────────────────────────────────────────
 
 bool Server::Start() {
-    printf("[TextureServer] Creating shared memory (%llu bytes = %.1f MiB)...\n",
-           static_cast<unsigned long long>(TexProto::SHM_TOTAL_SIZE),
-           static_cast<double>(TexProto::SHM_TOTAL_SIZE) / (1024.0 * 1024.0));
+    printf("[TextureServer] Creating shared memory header (%u bytes = %.1f KiB)...\n",
+           TexProto::SHM_HEADER,
+           static_cast<double>(TexProto::SHM_HEADER) / 1024.0);
+    printf("[TextureServer] Creating %u data windows (%llu bytes each = %.1f MiB, total %.1f MiB)...\n",
+           TexProto::SHM_WINDOW_COUNT,
+           static_cast<unsigned long long>(TexProto::SHM_DATA_WINDOW_SIZE),
+           static_cast<double>(TexProto::SHM_DATA_WINDOW_SIZE) / (1024.0 * 1024.0),
+           static_cast<double>(TexProto::SHM_WINDOW_COUNT) *
+           (static_cast<double>(TexProto::SHM_DATA_WINDOW_SIZE) / (1024.0 * 1024.0)));
     fflush(stdout);
 
     if (!shm_.Create()) {
@@ -46,8 +61,9 @@ bool Server::Start() {
     }
 
     running_.store(true, std::memory_order_release);
-    printf("[TextureServer] Shared memory created OK. Slots=%u, SlotDataSize=%u KiB\n",
-           TexProto::SLOT_COUNT, TexProto::SLOT_DATA_SIZE / 1024);
+    printf("[TextureServer] Shared memory created OK. Slots=%u, SlotDataSize=%u KiB, Windows=%u, SlotsPerWindow=%u\n",
+           TexProto::SLOT_COUNT, TexProto::SLOT_DATA_SIZE / 1024,
+           TexProto::SHM_WINDOW_COUNT, TexProto::SLOTS_PER_WINDOW);
     printf("[TextureServer] Started. PID=%lu, threads=%u, cache_max=%.1f MiB\n",
            static_cast<unsigned long>(GetCurrentProcessId()),
            pool_.WorkerCount(),
@@ -217,8 +233,10 @@ void Server::HandleClient(HANDLE pipe) {
 void Server::HandleLoad(HANDLE pipe, const std::string& path,
                         const std::vector<uint8_t>& raw_data, uint8_t priority)
 {
+    const std::string cacheKey = NormalizePathKey(path);
+
     // 1. Check LRU cache.
-    const DecodedTexture* cached = cache_.Get(path);
+    const DecodedTexture* cached = cache_.Get(cacheKey);
     if (cached) {
         cache_hits_.fetch_add(1, std::memory_order_relaxed);
 
@@ -317,7 +335,7 @@ void Server::HandleLoad(HANDLE pipe, const std::string& path,
     resp.mip_levels = decoded.mip_levels;
 
     // Cache a copy before we send the response (Put takes by value/move).
-    cache_.Put(path, std::move(decoded));
+    cache_.Put(cacheKey, std::move(decoded));
 
     SendResponse(pipe, resp);
 }
@@ -325,7 +343,8 @@ void Server::HandleLoad(HANDLE pipe, const std::string& path,
 // ── Query ──────────────────────────────────────────────────────────────────
 
 void Server::HandleQuery(HANDLE pipe, const std::string& path) {
-    const DecodedTexture* cached = cache_.Get(path);
+    const std::string cacheKey = NormalizePathKey(path);
+    const DecodedTexture* cached = cache_.Get(cacheKey);
 
     TexProto::Response resp{};
     if (cached) {
