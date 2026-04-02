@@ -34,6 +34,8 @@ crashes with HD texture packs by moving heavy texture residency pressure out of 
  3. Copy `TextureServer64.exe` to your game directory
  4. Add `VanillaHelpers.dll` to the `dlls.txt` file
  5. Start the game with 'WoW.exe'
+
+If using a popular private server launcher, select "Ignore updates" for the VanillaHelpers.dll.
  
  
  ## Features
