@@ -96,9 +96,32 @@ static int __fastcall Script_ReadFile(void *L) {
     return 1;
 }
 
+static int __fastcall Script_FileExists(void *L) {
+    if (!Game::Lua::IsString(L, 1)) {
+        Game::Lua::Error(L, "Usage: FileExists(filename)");
+        return 0;
+    }
+
+    const auto *filename = Game::Lua::ToString(L, 1);
+    if (!IsValidFilename(filename)) {
+        Game::Lua::Error(L, "Invalid or empty filename (must not contain: < > : \" / \\ | ?*)");
+        return 0;
+    }
+
+    auto fullPath = std::filesystem::path("VanillaHelpersData") / filename;
+
+    std::ifstream in(fullPath);
+    if (!in) {
+        return 0;
+    } else
+        return 1;
+}
+
 void RegisterLuaFunctions() {
     Game::FrameScript_RegisterFunction("WriteFile", reinterpret_cast<uintptr_t>(&Script_WriteFile));
     Game::FrameScript_RegisterFunction("ReadFile", reinterpret_cast<uintptr_t>(&Script_ReadFile));
+    Game::FrameScript_RegisterFunction("FileExists", reinterpret_cast<uintptr_t>(&Script_FileExists));
 }
+
 
 } // namespace FileIO
