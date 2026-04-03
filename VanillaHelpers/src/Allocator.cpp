@@ -16,6 +16,7 @@
 #include "Game.h"
 #include "MinHook.h"
 #include "Offsets.h"
+#include "TexBridge.h"
 
 #include <stdint.h>
 
@@ -46,6 +47,7 @@ static inline void UpdateSmallSizeBit(void *hdr, uint32_t size, uint32_t sizeCla
 static void *__fastcall SMemAllocInternal_h(void *thisptr, void * /*edx*/, uint32_t sizeClass,
                                             uint32_t size, uint32_t commit) {
     void *p = SMemAllocInternal_o(thisptr, sizeClass, size, commit);
+    TexBridge::LogFocusedMain0573Backend(thisptr, sizeClass, size, commit, p);
     if (p && commit)
         UpdateSmallSizeBit(p, size, sizeClass);
     return p;

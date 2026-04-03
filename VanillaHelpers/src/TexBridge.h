@@ -27,9 +27,10 @@ bool Initialize(HMODULE hVanillaHelpers);
 // Install SFile_Open hook via MinHook.
 bool InstallHooks();
 
-// Call from CGGameUI_Shutdown hook before the original.
-// Sends CMD_SHUTDOWN to server, unmaps shared memory, joins worker thread.
-void Shutdown();
+// Call from CGGameUI_Shutdown hook before the original with terminateServer=false
+// so reloads preserve the helper process. Call with terminateServer=true on
+// final process detach to stop the server and tear down shared memory.
+void Shutdown(bool terminateServer = true);
 
 // Called once per frame for LRU eviction of the 32-bit working set.
 void OnFrameTick();
@@ -59,6 +60,10 @@ bool GetDecodedTexture(const char *path, const void *rawData, uint32_t rawSize,
 
 // Release a shared memory slot after D3D9 upload.
 void ReleaseSlot(int32_t slot);
+
+// Focused logging for the dominant 0x645640 / 0x00866650 / 0x573 branch.
+void LogFocusedMain0573Backend(void *allocator, uint32_t sizeClass, uint32_t size,
+                               uint32_t commit, void *result);
 
 // ── Pipeline stats (for diagnostics) ──────────────────────────────────
 

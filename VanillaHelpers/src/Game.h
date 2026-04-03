@@ -1057,7 +1057,7 @@ using ClntObjMgrObjectPtr_t = CGObject_C *(__fastcall *)(uint32_t typeMask,
                                                          const char *debugMessage, uint64_t guid,
                                                          int debugCode);
 using RenderObjectBlips_t = void(__thiscall *)(CGMinimapFrame *thisptr, DNInfo *dnInfo);
-using GxTexOwnerUpdate_t = int(__thiscall *)(void *pThis, void *entry);
+using GxTexOwnerUpdate_t = int(__thiscall *)(void *pThis, void *entry, void *bounds, void *notify);
 using TextureGetGxTex_t = CGxTex *(__fastcall *)(HTEXTURE__ * texture, int, CStatus *status);
 using TextureDestroy_t = void(__cdecl *)();
 using GxRsSet_t = void(__fastcall *)(EGxRenderState, CGxTex *);

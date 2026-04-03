@@ -54,7 +54,7 @@ static void __fastcall LoadScriptFunctions_h() {
 }
 
 static void __fastcall CGGameUI_Shutdown_h() {
-    TexBridge::Shutdown();
+    TexBridge::Shutdown(false);
     Morph::Reset();
     CGGameUI_Shutdown_o();
     Blips::Reset();
@@ -94,6 +94,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID lpReserved) {
         TexBridge::EnsureServerRunning();
         TexBridge::InstallHooks();
     } else if (reason == DLL_PROCESS_DETACH) {
+        TexBridge::Shutdown(true);
         MH_Uninitialize();
     }
     return TRUE;
