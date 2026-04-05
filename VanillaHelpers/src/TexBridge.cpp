@@ -346,7 +346,8 @@ static SRWLOCK s_queueLock = SRWLOCK_INIT;
 static CONDITION_VARIABLE s_queueCV = CONDITION_VARIABLE_INIT;
 static std::deque<DecodeRequest> s_queue;
 static std::unordered_set<uint64_t> s_pendingDecodes;
-static HANDLE  s_workerThread = nullptr;
+static constexpr int WORKER_COUNT = 4;
+static HANDLE  s_workerThreads[WORKER_COUNT] = {};
 static volatile bool s_workerRunning = false;
 
 // Back-pressure
@@ -1484,12 +1485,11 @@ static bool ReconnectServer() {
 
 // ── Persistent pipe connection (P8) ─────────────────────────────────
 
-static HANDLE s_workerPipe = INVALID_HANDLE_VALUE;
-static HANDLE s_mainPipe   = INVALID_HANDLE_VALUE;
-static DWORD  s_workerThreadId = 0;
+static HANDLE s_mainPipe = INVALID_HANDLE_VALUE;
+static thread_local HANDLE s_threadPipe = INVALID_HANDLE_VALUE;
 
 static HANDLE& GetThreadPipe() {
-    return (GetCurrentThreadId() == s_workerThreadId) ? s_workerPipe : s_mainPipe;
+    return s_threadPipe;
 }
 
 static void CloseIfValid(HANDLE &h) {
@@ -1520,8 +1520,8 @@ static void InvalidatePersistentPipe() {
 }
 
 static void ClosePersistentPipes() {
-    CloseIfValid(s_workerPipe);
     CloseIfValid(s_mainPipe);
+    // Worker thread-local pipes are closed when each worker exits
 }
 
 static int32_t SendToServer(const char *path, const uint8_t *rawData,
@@ -1697,8 +1697,7 @@ static bool IsSwapWorldDeferred() {
 // ══════════════════════════════════════════════════════════════════════
 
 static DWORD WINAPI DecodeWorkerProc(LPVOID /*param*/) {
-    s_workerThreadId = GetCurrentThreadId();
-    LogWrite("Worker thread started");
+    LogWrite("Worker thread %lu started", GetCurrentThreadId());
     while (s_workerRunning) {
         DecodeRequest req;
 
@@ -1765,7 +1764,8 @@ static DWORD WINAPI DecodeWorkerProc(LPVOID /*param*/) {
             LogWrite("Worker: FAILED for '%s'", req.path);
         }
     }
-    LogWrite("Worker thread exiting");
+    CloseIfValid(s_threadPipe); // Clean up this thread's persistent pipe
+    LogWrite("Worker thread %lu exiting", GetCurrentThreadId());
     return 0;
 }
 
@@ -1774,20 +1774,26 @@ static unsigned __stdcall DecodeWorkerEntry(void *) {
 }
 
 static void StartWorker() {
-    if (s_workerThread) return;
+    if (s_workerThreads[0]) return;
     s_workerRunning = true;
-    s_workerThread = reinterpret_cast<HANDLE>(
-        _beginthreadex(nullptr, 0, DecodeWorkerEntry, nullptr, 0, nullptr));
-    LogWrite("StartWorker: thread=%p", s_workerThread);
+    for (int i = 0; i < WORKER_COUNT; ++i) {
+        s_workerThreads[i] = reinterpret_cast<HANDLE>(
+            _beginthreadex(nullptr, 0, DecodeWorkerEntry, nullptr, 0, nullptr));
+    }
+    LogWrite("StartWorker: %d worker threads launched", WORKER_COUNT);
 }
 
 static void StopWorker() {
-    if (!s_workerThread) return;
+    if (!s_workerThreads[0]) return;
     s_workerRunning = false;
     WakeAllConditionVariable(&s_queueCV);
-    WaitForSingleObject(s_workerThread, 3000);
-    CloseHandle(s_workerThread);
-    s_workerThread = nullptr;
+    for (int i = 0; i < WORKER_COUNT; ++i) {
+        if (s_workerThreads[i]) {
+            WaitForSingleObject(s_workerThreads[i], 3000);
+            CloseHandle(s_workerThreads[i]);
+            s_workerThreads[i] = nullptr;
+        }
+    }
     ClosePersistentPipes();
 
     AcquireSRWLockExclusive(&s_queueLock);
