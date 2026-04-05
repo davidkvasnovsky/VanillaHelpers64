@@ -18,9 +18,8 @@
 #include "Offsets.h"
 #include "TexBridge.h"
 
+#include <cstring>
 #include <stdint.h>
-#include <intrin.h>
-#include <windows.h>
 
 namespace Allocator {
 
@@ -34,62 +33,6 @@ static constexpr uint8_t MAX_SMALL_CLASS = 0x19; // 32 MiB
 static constexpr uint32_t REGION_SIZE = 1U << MAX_SMALL_CLASS;
 static constexpr uint32_t REGION_SIZE_NEG = 0U - REGION_SIZE;
 
-// ── Region Pool ──────────────────────────────────────────────────────
-// Pre-reserves a large contiguous VA block at DLL init (before
-// fragmentation) so Storm can always find 32 MiB regions.
-
-static uint8_t *g_poolBase = nullptr;
-static uint32_t g_poolCapacity = 0;
-static volatile LONG g_poolOffset = 0;
-
-using VirtualAlloc_t = LPVOID(WINAPI *)(LPVOID, SIZE_T, DWORD, DWORD);
-static VirtualAlloc_t VirtualAlloc_o = nullptr;
-
-// Storm's region reservation function is near this address range.
-// Only intercept VirtualAlloc calls from within Storm's allocator.
-static constexpr uintptr_t STORM_ALLOC_RANGE_START = 0x645000;
-static constexpr uintptr_t STORM_ALLOC_RANGE_END   = 0x645200;
-
-static LPVOID WINAPI VirtualAlloc_hook(LPVOID lpAddress, SIZE_T dwSize,
-                                       DWORD flAllocationType, DWORD flProtect) {
-    // Intercept Storm's region reservation:
-    //   NULL base, exactly REGION_SIZE, includes MEM_RESERVE,
-    //   AND called from within Storm's allocator code
-    if (lpAddress == nullptr &&
-        dwSize == REGION_SIZE &&
-        (flAllocationType & MEM_RESERVE) &&
-        g_poolBase != nullptr) {
-
-        // Verify caller is Storm's allocator by checking return address
-#ifdef _MSC_VER
-        uintptr_t retAddr = reinterpret_cast<uintptr_t>(_ReturnAddress());
-#else
-        uintptr_t retAddr = reinterpret_cast<uintptr_t>(__builtin_return_address(0));
-#endif
-        if (retAddr < STORM_ALLOC_RANGE_START || retAddr > STORM_ALLOC_RANGE_END)
-            return VirtualAlloc_o(lpAddress, dwSize, flAllocationType, flProtect);
-
-        // Atomically claim the next slot in the pool
-        for (;;) {
-            LONG offset = g_poolOffset;
-            LONG newOffset = offset + static_cast<LONG>(REGION_SIZE);
-            if (static_cast<uint32_t>(newOffset) > g_poolCapacity)
-                break; // Pool exhausted — fall through to normal VirtualAlloc
-            if (InterlockedCompareExchange(&g_poolOffset, newOffset, offset) == offset) {
-                LPVOID regionBase = g_poolBase + offset;
-                // If caller also wants MEM_COMMIT, commit the pages
-                if (flAllocationType & MEM_COMMIT) {
-                    if (!VirtualAlloc_o(regionBase, dwSize, MEM_COMMIT, flProtect))
-                        break; // Commit failed — fall through
-                }
-                return regionBase;
-            }
-            // CAS failed (concurrent allocation) — retry
-        }
-    }
-
-    return VirtualAlloc_o(lpAddress, dwSize, flAllocationType, flProtect);
-}
 
 // Store bit24 of size into header1 bit5.
 // This preserves the extra size bit for 32 MiB small blocks.
@@ -221,14 +164,24 @@ static void PatchBiggerMemoryRegion() {
                        &MAX_SMALL_CLASS, sizeof(MAX_SMALL_CLASS));
     Common::PatchBytes(reinterpret_cast<void *>(Offsets::PATCH_SMEM_SMALL_LARGE_CMP_GETSIZE + 2),
                        &MAX_SMALL_CLASS, sizeof(MAX_SMALL_CLASS));
-}
 
-void InitializeRegionPool() {
-    // Disabled: VirtualAlloc hook interferes with Wine's internal memory management,
-    // causing FrameXML/addon loading failures. The OOM crash from VA fragmentation
-    // is rare and less harmful than breaking the game's UI system.
-    // TODO: Find a Wine-compatible approach (e.g., hook Storm's reserve function
-    // directly instead of hooking VirtualAlloc globally).
+    // Patch MEM_RESERVE to MEM_RESERVE | MEM_TOP_DOWN to reduce VA fragmentation.
+    // Storm allocates regions from the top of the address space, keeping the
+    // lower area contiguous for future 32 MiB reservations. Wine-compatible.
+    {
+        const uint8_t pattern[] = {0x68, 0x00, 0x20, 0x00, 0x00}; // push MEM_RESERVE (0x2000)
+        const auto *start = reinterpret_cast<const uint8_t *>(
+            Offsets::PATCH_SMEM_RESERVE_PUSH_SIZE);
+        for (int i = 0; i > -32; --i) {
+            if (memcmp(start + i, pattern, sizeof(pattern)) == 0) {
+                const uint32_t newFlags = 0x00102000; // MEM_RESERVE | MEM_TOP_DOWN
+                Common::PatchBytes(
+                    reinterpret_cast<void *>(Offsets::PATCH_SMEM_RESERVE_PUSH_SIZE + i + 1),
+                    &newFlags, sizeof(newFlags));
+                break;
+            }
+        }
+    }
 }
 
 void Initialize() { PatchBiggerMemoryRegion(); }
@@ -242,20 +195,6 @@ bool InstallHooks() {
                   SMemFreeInternal_Decode_o);
     HOOK_FUNCTION(Offsets::FUN_SMEM_GET_SIZE_INTERNAL_DECODE, SMemGetSizeInternal_Decode_h,
                   SMemGetSizeInternal_Decode_o);
-
-    return true;
-}
-
-bool InstallVirtualAllocHook() {
-    if (!g_poolBase)
-        return true; // No pool reserved — skip hook, Storm uses normal VirtualAlloc
-
-    auto *target = reinterpret_cast<LPVOID>(&VirtualAlloc);
-    if (MH_CreateHook(target, reinterpret_cast<LPVOID>(VirtualAlloc_hook),
-                      reinterpret_cast<LPVOID *>(&VirtualAlloc_o)) != MH_OK)
-        return false;
-    if (MH_EnableHook(target) != MH_OK)
-        return false;
 
     return true;
 }

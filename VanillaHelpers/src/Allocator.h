@@ -13,9 +13,7 @@
 
 namespace Allocator {
 
-void InitializeRegionPool();
 void Initialize();
 bool InstallHooks();
-bool InstallVirtualAllocHook();
 
 } // namespace Allocator

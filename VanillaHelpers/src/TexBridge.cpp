@@ -455,6 +455,51 @@ static constexpr LONG RUNTIME_METRICS_SWAP_INTERVAL = 250;
 static constexpr DWORD SWAP_STARTUP_GRACE_MS = 15000;
 static constexpr DWORD SWAP_WORLD_GRACE_MS = 2000;
 
+// ── Device reset detection ──────────────────────────────────────────
+// D3DPOOL_DEFAULT textures are lost on device reset (window maximize/resize).
+// Detect via TestCooperativeLevel and flush all DEFAULT textures proactively.
+static void *s_cachedD3DDevice = nullptr;
+static bool s_wasDeviceLost = false;
+
+// IDirect3DDevice9 vtable index for TestCooperativeLevel
+static constexpr uint32_t VTIDX_TESTCOOPERATIVELEVEL = 3;
+
+static void FlushAllDefaultPoolTextures(const char *reason);
+
+// ── D3D9 Device Reset Hook ──────────────────────────────────────────
+// Hook IDirect3DDevice9::Reset via vtable patching. This fires BEFORE
+// WineD3D processes the reset, giving us a guaranteed window to release
+// all D3DPOOL_DEFAULT textures (which are invalidated by Reset).
+
+typedef HRESULT(__stdcall *D3DDeviceReset_fn)(void *pThis, void *pPresentationParameters);
+static D3DDeviceReset_fn s_origDeviceReset = nullptr;
+static bool s_deviceResetHooked = false;
+
+static HRESULT __stdcall DeviceReset_Hook(void *pThis, void *pPresentationParameters) {
+    FlushAllDefaultPoolTextures("device-reset");
+    return s_origDeviceReset(pThis, pPresentationParameters);
+}
+
+static void HookDeviceReset(void *device) {
+    if (s_deviceResetHooked || !device) return;
+
+    uint32_t *vtable = *reinterpret_cast<uint32_t **>(device);
+    if (!vtable) return;
+
+    // IDirect3DDevice9::Reset is vtable index 16
+    uint32_t *resetSlot = &vtable[16];
+
+    s_origDeviceReset = reinterpret_cast<D3DDeviceReset_fn>(*resetSlot);
+
+    DWORD oldProt = 0;
+    if (VirtualProtect(resetSlot, sizeof(uint32_t), PAGE_EXECUTE_READWRITE, &oldProt)) {
+        *resetSlot = reinterpret_cast<uint32_t>(DeviceReset_Hook);
+        VirtualProtect(resetSlot, sizeof(uint32_t), oldProt, &oldProt);
+        s_deviceResetHooked = true;
+        LogWrite("D3D9 Device Reset hook installed on vtable[16]=%p", s_origDeviceReset);
+    }
+}
+
 // ══════════════════════════════════════════════════════════════════════
 //  Phase 2: Texture Memory Tracking & Struct Discovery
 // ══════════════════════════════════════════════════════════════════════
@@ -1990,12 +2035,44 @@ static const char *PoolName(uint32_t pool) {
     }
 }
 
+static void FlushAllDefaultPoolTextures(const char *reason) {
+    AcquireSRWLockExclusive(&s_defaultPoolLock);
+    size_t count = s_defaultPoolLru.size();
+    for (auto &entry : s_defaultPoolLru) {
+        // Restore managed texture binding in CGxTex
+        if (entry.texture_key && entry.managed_tex) {
+            auto *texture = reinterpret_cast<Game::HTEXTURE__ *>(entry.texture_key);
+            const uint32_t *htexWords = reinterpret_cast<const uint32_t *>(texture);
+            auto *gxTex = reinterpret_cast<Game::CGxTex *>(htexWords[OFF_HTEX_GXTEX / 4]);
+            if (gxTex) {
+                uint32_t *gxWords = reinterpret_cast<uint32_t *>(gxTex);
+                gxWords[OFF_GX_D3DTEX / 4] = reinterpret_cast<uint32_t>(entry.managed_tex);
+            }
+        }
+        // Release the DEFAULT texture (still alive — this runs BEFORE Reset)
+        if (entry.default_tex)
+            ReleaseD3DTexture(entry.default_tex);
+        // Release our AddRef on the managed texture
+        if (entry.managed_ref_held && entry.managed_tex)
+            ReleaseD3DTexture(entry.managed_tex);
+        entry.default_tex = nullptr;
+        entry.managed_tex = nullptr;
+        entry.managed_ref_held = false;
+    }
+    s_defaultPoolMap.clear();
+    s_defaultPoolLru.clear();
+    s_defaultPoolBytes = 0;
+    for (auto &held : s_restoredManagedRefs) {
+        ReleaseD3DTexture(held.second);
+    }
+    s_restoredManagedRefs.clear();
+    ReleaseSRWLockExclusive(&s_defaultPoolLock);
+    LogWrite("DEVICE_RESET_FLUSH: reason=%s flushed=%zu DEFAULT pool textures",
+             reason ? reason : "unknown", count);
+}
+
 static bool TrySwapToDefaultPool(Game::HTEXTURE__ *texture, Game::CGxTex *gxTex,
                                  uint64_t pathHash, const char *path) {
-    // Under Wine/WineD3D, MANAGED→DEFAULT swap provides no benefit (both pools
-    // map to the same OpenGL/Metal memory) and causes crashes on D3D device reset
-    // (window maximize) because DEFAULT textures are invalidated. Disable entirely.
-    return false;
     if (!texture || !gxTex || !path)
         return false;
     const uintptr_t textureKey = reinterpret_cast<uintptr_t>(texture);
@@ -2066,6 +2143,8 @@ static bool TrySwapToDefaultPool(Game::HTEXTURE__ *texture, Game::CGxTex *gxTex,
     auto fnGetDevice = reinterpret_cast<D3DTextureGetDevice_fn>(texVtable[3]);
     void *device = nullptr;
     HRESULT getDeviceHr = fnGetDevice(managedTex, &device);
+    if (getDeviceHr == D3D_OK && device)
+        s_cachedD3DDevice = device; // Cache for TestCooperativeLevel
     if (getDeviceHr != D3D_OK || !device) {
         LogWrite("DEFAULT_SWAP_FAIL: GetDevice hr=0x%08lX '%s'",
                  static_cast<unsigned long>(getDeviceHr), path);
@@ -2389,6 +2468,10 @@ static Game::CGxTex * __fastcall TextureGetGxTex_h(
     if (pathHash == 0) {
         return TextureGetGxTex_o(texture, edx, status);
     }
+
+    // Hook D3D9 Device::Reset on first tracked-texture call (device exists by now)
+    if (!s_deviceResetHooked && s_cachedD3DDevice)
+        HookDeviceReset(s_cachedD3DDevice);
 
     // Tracked texture: read the full path for Phase 2 processing
     std::string trackedPath;

@@ -64,9 +64,6 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID lpReserved) {
     if (reason == DLL_PROCESS_ATTACH) {
         DisableThreadLibraryCalls(hModule);
 
-        // Reserve contiguous VA pool FIRST, before any allocations fragment the space
-        Allocator::InitializeRegionPool();
-
         if (MH_Initialize() != MH_OK)
             return FALSE;
 
@@ -97,10 +94,6 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID lpReserved) {
         TexBridge::EnsureServerRunning();
         TexBridge::InstallHooks();
 
-        // Hook VirtualAlloc LAST so Storm's region reservations use our pre-reserved pool.
-        // Must be after all other MinHook hooks to avoid circular dependency.
-        if (!Allocator::InstallVirtualAllocHook())
-            return FALSE;
     } else if (reason == DLL_PROCESS_DETACH) {
         TexBridge::Shutdown(true);
         // Skip MH_Uninitialize — process is exiting, unhooking is unnecessary
