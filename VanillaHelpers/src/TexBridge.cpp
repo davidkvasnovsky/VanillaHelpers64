@@ -1959,6 +1959,14 @@ static bool IsLiveTextureBindingUsable(void *liveTex, void *expectedDefaultTex,
     if (liveTex != expectedDefaultTex && liveTex != expectedManagedTex)
         return false;
 
+    // Validate pointer before calling COM methods — DEFAULT pool textures
+    // become invalid after D3D device reset (e.g., window maximize).
+    if (IsBadReadPtr(liveTex, sizeof(void *)))
+        return false;
+    auto *vtable = *reinterpret_cast<uint32_t **>(liveTex);
+    if (!vtable || IsBadReadPtr(vtable, (VTIDX_GETLEVELDESC + 1) * sizeof(uint32_t)))
+        return false;
+
     D3DSurfDesc desc{};
     if (!DescribeD3DTexture(liveTex, &desc,
                             liveTex == expectedDefaultTex
@@ -1984,6 +1992,10 @@ static const char *PoolName(uint32_t pool) {
 
 static bool TrySwapToDefaultPool(Game::HTEXTURE__ *texture, Game::CGxTex *gxTex,
                                  uint64_t pathHash, const char *path) {
+    // Under Wine/WineD3D, MANAGED→DEFAULT swap provides no benefit (both pools
+    // map to the same OpenGL/Metal memory) and causes crashes on D3D device reset
+    // (window maximize) because DEFAULT textures are invalidated. Disable entirely.
+    return false;
     if (!texture || !gxTex || !path)
         return false;
     const uintptr_t textureKey = reinterpret_cast<uintptr_t>(texture);
