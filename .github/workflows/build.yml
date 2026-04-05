@@ -1,0 +1,47 @@
+name: Build VanillaHelpers
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  build-dll:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Configure VanillaHelpers (32-bit MSVC)
+        run: cmake -S VanillaHelpers -B build-dll -A Win32
+
+      - name: Build VanillaHelpers
+        run: cmake --build build-dll --config Release
+
+      - name: Upload VanillaHelpers.dll
+        uses: actions/upload-artifact@v4
+        with:
+          name: VanillaHelpers-dll
+          path: build-dll/Release/VanillaHelpers.dll
+
+  build-server:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Configure TextureServer64 (64-bit MSVC)
+        run: cmake -S TextureServer64 -B build-server -A x64
+
+      - name: Build TextureServer64
+        run: cmake --build build-server --config Release
+
+      - name: Upload TextureServer64.exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: TextureServer64-exe
+          path: build-server/server/Release/TextureServer64.exe
