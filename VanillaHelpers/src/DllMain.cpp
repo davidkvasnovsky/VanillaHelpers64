@@ -60,18 +60,22 @@ static void __fastcall CGGameUI_Shutdown_h() {
     Blips::Reset();
 }
 
+__attribute__((dllexport))
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID lpReserved) {
     if (reason == DLL_PROCESS_ATTACH) {
         DisableThreadLibraryCalls(hModule);
 
-        Allocator::Initialize();
-        Texture::Initialize();
+        // Reserve contiguous VA pool FIRST, before any allocations fragment the space
+        Allocator::InitializeRegionPool();
 
         if (MH_Initialize() != MH_OK)
             return FALSE;
 
+        Allocator::Initialize();
+        Texture::Initialize();
+
         auto *target = reinterpret_cast<LPVOID>(Offsets::FUN_INVALID_FUNCTION_PTR_CHECK);
-        if (MH_CreateHook(target, static_cast<LPVOID>(InvalidFunctionPtrCheck_h), nullptr) != MH_OK)
+        if (MH_CreateHook(target, reinterpret_cast<LPVOID>(InvalidFunctionPtrCheck_h), nullptr) != MH_OK)
             return FALSE;
         if (MH_EnableHook(target) != MH_OK)
             return FALSE;
@@ -93,6 +97,11 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID lpReserved) {
         TexBridge::Initialize(hModule);
         TexBridge::EnsureServerRunning();
         TexBridge::InstallHooks();
+
+        // Hook VirtualAlloc LAST so Storm's region reservations use our pre-reserved pool.
+        // Must be after all other MinHook hooks to avoid circular dependency.
+        if (!Allocator::InstallVirtualAllocHook())
+            return FALSE;
     } else if (reason == DLL_PROCESS_DETACH) {
         TexBridge::Shutdown(true);
         MH_Uninitialize();

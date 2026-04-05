@@ -45,7 +45,7 @@ public:
     void Stop();
 
 private:
-    /// Handle a single pipe connection (runs on the accept thread).
+    /// Handle a single pipe connection (dispatched to thread pool).
     void HandleClient(HANDLE pipe);
 
     /// Process a Load/Prefetch request: decode raw_data and place in shared memory.
@@ -81,6 +81,7 @@ private:
     BlpDecoder                blp_decoder_;
     TgaDecoder                tga_decoder_;
     std::atomic<bool>         running_{false};
+    HANDLE                    shm_ready_event_{nullptr};
     std::atomic<uint32_t>     inflight_decodes_{0};
     std::atomic<uint64_t>     queued_bytes_{0};
 

@@ -13,6 +13,7 @@
 
 #include "Common.h"
 
+#include <cstring>
 #include <iostream>
 #include <windows.h>
 

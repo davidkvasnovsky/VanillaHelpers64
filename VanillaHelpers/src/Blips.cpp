@@ -18,6 +18,7 @@
 #include "Offsets.h"
 
 #include <algorithm>
+#include <cmath>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -257,42 +258,37 @@ static void __fastcall RenderObjectBlips_h(Game::CGMinimapFrame *thisptr, void *
 
 constexpr uintptr_t minimapSkipPartyUnitAddress = 0x4ed79e;
 
+#ifdef _MSC_VER
 static void __declspec(naked) MinimapRender_PartyListing_h() {
     __asm {
         pushad
-        mov  eax, [edi + 0xbc7660] // GUID low
-        mov  edx, [edi + 0xbc7664] // GUID high
+        mov  eax, [edi + 0xbc7660]
+        mov  edx, [edi + 0xbc7664]
         push edx
         push eax
         call IsUnitTracked
         add  esp, 8
         test al, al
         jnz  skip
-
         popad
         jmp  dword ptr [MinimapRender_PartyListing_o]
     skip:
         popad
-        jmp  minimapSkipPartyUnitAddress // skip processing this unit
+        jmp  minimapSkipPartyUnitAddress
     }
 }
 
-// Right before the early-out check uses ECX to decide if anything changed
 static void __declspec(naked) OnLayerTrackUpdate_ChangedGate_h() {
     __asm {
         pushad
-
-        mov  eax, [ebx+0x8] // param pointer
-        push dword ptr [ebp-0x40] // offsetY
-        push dword ptr [ebp-0x3C] // offsetX
-        push dword ptr [eax+0x28] // mouseY
-        push dword ptr [eax+0x24] // mouseX
+        mov  eax, [ebx+0x8]
+        push dword ptr [ebp-0x40]
+        push dword ptr [ebp-0x3C]
+        push dword ptr [eax+0x28]
+        push dword ptr [eax+0x24]
         call UpdateCustomHover
         add  esp, 16
-
         popad
-
-            // If our set changed, force ECX=1 (stock "changed" flag)
         cmp  byte ptr [g_blipHoverState.changed], 0
         je   short no_custom_change
         mov  ecx, 1
@@ -301,10 +297,8 @@ static void __declspec(naked) OnLayerTrackUpdate_ChangedGate_h() {
     }
 }
 
-// Right before the branch that decides whether to build/update the tooltip text
 static void __declspec(naked) OnLayerTrackUpdate_PreShowGate_h() {
     __asm {
-        // If we have any changes, force EDX=1 so the stock code builds the tooltip
         cmp  byte ptr [g_blipHoverState.changed], 0
         je   short no_set_edx
         mov  edx, 1
@@ -313,20 +307,94 @@ static void __declspec(naked) OnLayerTrackUpdate_PreShowGate_h() {
     }
 }
 
-// After the scratch tooltip buffer is initialized, before original blips text are appended
 static void __declspec(naked) OnLayerTrackUpdate_AppendToTooltipBuffer_h() {
     __asm {
-        // Append into stock scratch buffer [EBP-0x468]
         pushad
         lea  eax, [ebp-0x468]
         push eax
         call WriteToMinimapTooltip
         add  esp, 4
         popad
-
         jmp  dword ptr [OnLayerTrackUpdate_AppendToTooltipBuffer_o]
     }
 }
+#else
+__attribute__((naked)) static void MinimapRender_PartyListing_h() {
+    asm volatile(
+        ".intel_syntax noprefix\n\t"
+        "pushad\n\t"
+        "mov eax, [edi + 0xbc7660]\n\t"
+        "mov edx, [edi + 0xbc7664]\n\t"
+        "push edx\n\t"
+        "push eax\n\t"
+        "call %P0\n\t"
+        "add esp, 8\n\t"
+        "test al, al\n\t"
+        "jnz 1f\n\t"
+        "popad\n\t"
+        "jmp dword ptr [%1]\n\t"
+        "1:\n\t"
+        "popad\n\t"
+        "jmp %P2\n\t"
+        ".att_syntax\n\t"
+        :: "i"(IsUnitTracked),
+           "m"(MinimapRender_PartyListing_o),
+           "i"(minimapSkipPartyUnitAddress)
+    );
+}
+
+__attribute__((naked)) static void OnLayerTrackUpdate_ChangedGate_h() {
+    asm volatile(
+        ".intel_syntax noprefix\n\t"
+        "pushad\n\t"
+        "mov eax, [ebx+0x8]\n\t"
+        "push dword ptr [ebp-0x40]\n\t"
+        "push dword ptr [ebp-0x3C]\n\t"
+        "push dword ptr [eax+0x28]\n\t"
+        "push dword ptr [eax+0x24]\n\t"
+        "call %P0\n\t"
+        "add esp, 16\n\t"
+        "popad\n\t"
+        "cmp byte ptr [%1], 0\n\t"
+        "je 1f\n\t"
+        "mov ecx, 1\n\t"
+        "1: jmp dword ptr [%2]\n\t"
+        ".att_syntax\n\t"
+        :: "i"(UpdateCustomHover),
+           "m"(g_blipHoverState.changed),
+           "m"(OnLayerTrackUpdate_ChangedGate_o)
+    );
+}
+
+__attribute__((naked)) static void OnLayerTrackUpdate_PreShowGate_h() {
+    asm volatile(
+        ".intel_syntax noprefix\n\t"
+        "cmp byte ptr [%0], 0\n\t"
+        "je 1f\n\t"
+        "mov edx, 1\n\t"
+        "1: jmp dword ptr [%1]\n\t"
+        ".att_syntax\n\t"
+        :: "m"(g_blipHoverState.changed),
+           "m"(OnLayerTrackUpdate_PreShowGate_o)
+    );
+}
+
+__attribute__((naked)) static void OnLayerTrackUpdate_AppendToTooltipBuffer_h() {
+    asm volatile(
+        ".intel_syntax noprefix\n\t"
+        "pushad\n\t"
+        "lea eax, [ebp-0x468]\n\t"
+        "push eax\n\t"
+        "call %P0\n\t"
+        "add esp, 4\n\t"
+        "popad\n\t"
+        "jmp dword ptr [%1]\n\t"
+        ".att_syntax\n\t"
+        :: "i"(WriteToMinimapTooltip),
+           "m"(OnLayerTrackUpdate_AppendToTooltipBuffer_o)
+    );
+}
+#endif
 
 static bool InstallHooks() {
     if (g_hooksInstalled)
@@ -518,6 +586,9 @@ void Reset() {
     g_trackedGameObjectTypesBlips.clear();
     g_trackedObjectsData.clear();
     g_blipHoverState = BlipHoverState();
+
+    g_textureCache.clear();
+
     UninstallHooks();
 }
 

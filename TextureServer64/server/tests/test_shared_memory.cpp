@@ -76,7 +76,7 @@ static void test_slot_lifecycle() {
 
     // Mark slot ready.
     shm.MarkSlotReady(slot);
-    assert(sh->state == 2);  // ready
+    assert(sh->state == 3);  // SlotState::Ready
 
     // Sequence counter should have incremented.
     auto* hdr = shm.GetHeader();

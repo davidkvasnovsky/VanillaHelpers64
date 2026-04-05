@@ -15,12 +15,19 @@
 #include "Game.h"
 
 #include <cstring>
-#include <filesystem>
 #include <fstream>
 #include <sstream>
-#include <system_error>
+#include <string>
+#include <windows.h>
 
 namespace FileIO {
+
+static const char DATA_DIR[] = "VanillaHelpersData";
+static const char DATA_DIR_PREFIX[] = "VanillaHelpersData\\";
+
+static std::string DataPath(const char *filename) {
+    return std::string(DATA_DIR_PREFIX) + filename;
+}
 
 static bool IsValidFilename(const char *name) {
     return name && name[0] != '\0' && strpbrk(name, "<>:\"/\\|?*") == nullptr;
@@ -45,10 +52,9 @@ static int __fastcall Script_WriteFile(void *L) {
         return 0;
     }
 
-    std::error_code ec;
-    std::filesystem::create_directories("VanillaHelpersData", ec);
+    CreateDirectoryA(DATA_DIR, nullptr);
 
-    auto fullPath = std::filesystem::path("VanillaHelpersData") / filename;
+    std::string fullPath = DataPath(filename);
 
     auto openmode = std::ios::out;
     openmode |= (mode[0] == 'w') ? std::ios::trunc : std::ios::app;
@@ -80,7 +86,7 @@ static int __fastcall Script_ReadFile(void *L) {
         return 0;
     }
 
-    auto fullPath = std::filesystem::path("VanillaHelpersData") / filename;
+    std::string fullPath = DataPath(filename);
 
     std::ifstream in(fullPath);
     if (!in) {
@@ -108,13 +114,11 @@ static int __fastcall Script_FileExists(void *L) {
         return 0;
     }
 
-    auto fullPath = std::filesystem::path("VanillaHelpersData") / filename;
+    std::string fullPath = DataPath(filename);
 
-    std::ifstream in(fullPath);
-    if (!in) {
-        return 0;
-    } else
-        return 1;
+    bool exists = (GetFileAttributesA(fullPath.c_str()) != INVALID_FILE_ATTRIBUTES);
+    Game::Lua::PushNumber(L, exists ? 1.0 : 0.0);
+    return 1;
 }
 
 void RegisterLuaFunctions() {
@@ -122,6 +126,5 @@ void RegisterLuaFunctions() {
     Game::FrameScript_RegisterFunction("ReadFile", reinterpret_cast<uintptr_t>(&Script_ReadFile));
     Game::FrameScript_RegisterFunction("FileExists", reinterpret_cast<uintptr_t>(&Script_FileExists));
 }
-
 
 } // namespace FileIO

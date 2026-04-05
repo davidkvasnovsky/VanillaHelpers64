@@ -21,6 +21,7 @@
 #include <utility>
 #include <vector>
 #include <intrin.h>
+#include <process.h>
 
 // ── Protocol constants (mirror of Protocol.h to avoid cross-project include) ──
 namespace TBProto {
@@ -156,8 +157,7 @@ typedef uintptr_t(__fastcall *RetainedPayloadRead_t)(void *thisptr, void *edx,
 typedef void(__fastcall *ReturnRetainedPayload_t)(void *thisptr, void *edxPayload);
 
 static FILE *s_logFile = nullptr;
-static CRITICAL_SECTION s_logCS;
-static bool s_logCSInit = false;
+static SRWLOCK s_logLock = SRWLOCK_INIT;
 static bool s_fullLogEnabled = false;
 
 static bool StartsWithLogPrefix(const char *text, const char *prefix) {
@@ -200,10 +200,6 @@ static bool ShouldSuppressCompactLog(const char *fmt) {
 }
 
 static void LogInit(const char *dllDir) {
-    if (!s_logCSInit) {
-        InitializeCriticalSection(&s_logCS);
-        s_logCSInit = true;
-    }
     if (s_logFile) return;
 
     std::string path = std::string(dllDir) + "TexBridge.log";
@@ -222,15 +218,14 @@ static void LogWrite(const char *fmt, ...) {
     if (!s_logFile) return;
     if (ShouldSuppressCompactLog(fmt))
         return;
-    EnterCriticalSection(&s_logCS);
+    AcquireSRWLockExclusive(&s_logLock);
     va_list args;
     va_start(args, fmt);
     fprintf(s_logFile, "[TexBridge] ");
     vfprintf(s_logFile, fmt, args);
     fprintf(s_logFile, "\n");
-    fflush(s_logFile);
     va_end(args);
-    LeaveCriticalSection(&s_logCS);
+    ReleaseSRWLockExclusive(&s_logLock);
 }
 
 static void LogClose() {
@@ -250,7 +245,7 @@ static void LogClose() {
 
 namespace {
 
-static constexpr int    POOL_COUNT = 8;
+static constexpr int    POOL_COUNT = 24;
 static constexpr uint32_t POOL_BUF_SIZE = 2u * 1024u * 1024u;
 
 struct BufferPool {
@@ -553,18 +548,12 @@ static bool IsBgraFormat(uint8_t format) {
     return format == 0x05 || format == 0x00;
 }
 
-static bool IsTargetUncompressedPath(const char *path) {
-    if (!path) return false;
-    return IsTargetTexturePath(path);
-}
-
 static bool MeetsSwapSizeThreshold(uint32_t width, uint32_t height) {
     return width >= 256 || height >= 256;
 }
 
 static bool ShouldQueueDecodeForPath(const char *path) {
-    if (!path) return false;
-    return IsTargetTexturePath(path) || IsTargetUncompressedPath(path);
+    return IsTargetTexturePath(path);
 }
 
 static bool ShouldSwapFormatForPath(const char *path, uint8_t format,
@@ -572,7 +561,7 @@ static bool ShouldSwapFormatForPath(const char *path, uint8_t format,
     if (IsDxtFormat(format))
         return IsTargetTexturePath(path) && MeetsSwapSizeThreshold(width, height);
     if (IsBgraFormat(format))
-        return IsTargetUncompressedPath(path) && MeetsSwapSizeThreshold(width, height);
+        return IsTargetTexturePath(path) && MeetsSwapSizeThreshold(width, height);
     return false;
 }
 
@@ -639,35 +628,43 @@ static uint32_t ClampLevelsToPayload(uint32_t width, uint32_t height,
     return levels;
 }
 
+// Validate a COM-style object pointer: readable object, readable vtable, non-null entries.
+// Returns the vtable pointer on success, nullptr on failure.
+static uint32_t *ValidateD3DObject(void *obj, SIZE_T vtableBytes, const char *op) {
+    if (IsBadReadPtr(obj, sizeof(void *))) {
+        LogWrite("D3D9_TEXTURE_INVALID: op=%s tex=%p bad-ptr", op, obj);
+        return nullptr;
+    }
+    auto vtable = *reinterpret_cast<uint32_t **>(obj);
+    if (!vtable || IsBadReadPtr(vtable, vtableBytes)) {
+        LogWrite("D3D9_TEXTURE_INVALID: op=%s tex=%p vtable=%p", op, obj, vtable);
+        return nullptr;
+    }
+    return vtable;
+}
+
 static void ReleaseD3DTexture(void *tex) {
     if (!tex) return;
-    __try {
-        auto vtable = *reinterpret_cast<uint32_t **>(tex);
-        if (!vtable || !vtable[0] || !vtable[1] || !vtable[2]) {
-            LogWrite("D3D9_TEXTURE_INVALID: op=Release tex=%p vtable=%p", tex, vtable);
-            return;
-        }
-        auto fnRelease = reinterpret_cast<D3DTextureRelease_fn>(vtable[2]);
-        fnRelease(tex);
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        LogWrite("D3D9_TEXTURE_INVALID: op=Release tex=%p access-violation", tex);
+    auto *vtable = ValidateD3DObject(tex, 12, "Release");
+    if (!vtable) return;
+    if (!vtable[0] || !vtable[1] || !vtable[2]) {
+        LogWrite("D3D9_TEXTURE_INVALID: op=Release tex=%p vtable=%p null-entry", tex, vtable);
+        return;
     }
+    auto fnRelease = reinterpret_cast<D3DTextureRelease_fn>(vtable[2]);
+    fnRelease(tex);
 }
 
 static ULONG AddRefD3DTexture(void *tex) {
     if (!tex) return 0;
-    __try {
-        auto vtable = *reinterpret_cast<uint32_t **>(tex);
-        if (!vtable || !vtable[0] || !vtable[1] || !vtable[2]) {
-            LogWrite("D3D9_TEXTURE_INVALID: op=AddRef tex=%p vtable=%p", tex, vtable);
-            return 0;
-        }
-        auto fnAddRef = reinterpret_cast<D3DTextureAddRef_fn>(vtable[1]);
-        return fnAddRef(tex);
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        LogWrite("D3D9_TEXTURE_INVALID: op=AddRef tex=%p access-violation", tex);
+    auto *vtable = ValidateD3DObject(tex, 12, "AddRef");
+    if (!vtable) return 0;
+    if (!vtable[0] || !vtable[1] || !vtable[2]) {
+        LogWrite("D3D9_TEXTURE_INVALID: op=AddRef tex=%p vtable=%p null-entry", tex, vtable);
         return 0;
     }
+    auto fnAddRef = reinterpret_cast<D3DTextureAddRef_fn>(vtable[1]);
+    return fnAddRef(tex);
 }
 
 static std::string GetTrackedTexturePath(uintptr_t textureKey) {
@@ -691,7 +688,7 @@ static bool IsFocusedMain0573(uintptr_t arg2, uintptr_t arg3) {
 
 void LogFocusedMain0573Backend(void *allocator, uint32_t sizeClass, uint32_t size,
                                uint32_t commit, void *result) {
-    if (s_focusedMain0573.depth == 0)
+    if (!s_server_available || s_focusedMain0573.depth == 0)
         return;
 
     if (!commit || !result || !s_activeTextureAllocKey)
@@ -1045,6 +1042,11 @@ static bool ComparablePathMatchesStored(const std::string &inlinePath,
         if (_stricmp(suffix, stored.c_str()) == 0)
             return true;
     }
+    if (stored.size() > inlinePath.size()) {
+        const char *suffix = stored.c_str() + (stored.size() - inlinePath.size());
+        if (_stricmp(suffix, inlinePath.c_str()) == 0)
+            return true;
+    }
     return false;
 }
 
@@ -1134,54 +1136,67 @@ static void TouchDefaultPoolEntry(uintptr_t textureKey, uint64_t pathHash) {
     ReleaseSRWLockExclusive(&s_defaultPoolLock);
 }
 
+static volatile bool s_hasPendingEvictions = false;
+
 static void MarkEvictionsForBudget() {
     AcquireSRWLockExclusive(&s_defaultPoolLock);
     size_t projectedBytes = s_defaultPoolBytes;
-    while (projectedBytes > DEFAULT_POOL_BUDGET_BYTES && !s_defaultPoolLru.empty()) {
-        auto it = s_defaultPoolLru.end();
-        bool found = false;
-        for (auto scan = s_defaultPoolLru.end(); scan != s_defaultPoolLru.begin();) {
-            --scan;
-            if (scan->pending_eviction)
-                continue;
-            if (scan->protect_passes > 0) {
-                --scan->protect_passes;
-                continue;
-            }
-            if (scan->residency_class >= 2) {
-                if (!found) {
-                    it = scan;
-                    found = true;
-                }
-                continue;
-            }
-            it = scan;
-            found = true;
-            break;
-        }
-        if (!found) {
-            it = std::prev(s_defaultPoolLru.end());
-        }
-
-        auto &entry = *it;
-        entry.pending_eviction = true;
-        LogWrite("DEFAULT_SWAP_EVICT_MARK: texture=%p pathHash=0x%llX defaultTex=%p managedTex=%p size=%u class=%u protect=%u",
-                 reinterpret_cast<void *>(entry.texture_key),
-                 static_cast<unsigned long long>(entry.path_hash),
-                 entry.default_tex,
-                 entry.managed_tex,
-                 static_cast<unsigned>(entry.size_bytes),
-                 static_cast<unsigned>(entry.residency_class),
-                 static_cast<unsigned>(entry.protect_passes));
-        if (entry.size_bytes <= projectedBytes)
-            projectedBytes -= entry.size_bytes;
-        else
-            projectedBytes = 0;
+    if (projectedBytes <= DEFAULT_POOL_BUDGET_BYTES) {
+        ReleaseSRWLockExclusive(&s_defaultPoolLock);
+        return;
     }
+
+    // Single pass: collect eligible victims by residency class
+    using Iter = std::list<DefaultPoolEntry>::iterator;
+    static std::vector<Iter> lowClass, highClass;  // static: safe under exclusive lock
+    lowClass.clear(); highClass.clear();
+    for (auto it = s_defaultPoolLru.end(); it != s_defaultPoolLru.begin();) {
+        --it;
+        if (it->pending_eviction) continue;
+        if (it->protect_passes > 0) { --it->protect_passes; continue; }
+        if (it->residency_class >= 2)
+            highClass.push_back(it);
+        else
+            lowClass.push_back(it);
+    }
+
+    // Mark low-residency victims first, then high-residency
+    auto markFrom = [&](std::vector<Iter> &candidates) {
+        for (auto it : candidates) {
+            if (projectedBytes <= DEFAULT_POOL_BUDGET_BYTES) break;
+            it->pending_eviction = true;
+            s_hasPendingEvictions = true;
+            LogWrite("DEFAULT_SWAP_EVICT_MARK: texture=%p pathHash=0x%llX defaultTex=%p managedTex=%p size=%u class=%u protect=%u",
+                     reinterpret_cast<void *>(it->texture_key),
+                     static_cast<unsigned long long>(it->path_hash),
+                     it->default_tex,
+                     it->managed_tex,
+                     static_cast<unsigned>(it->size_bytes),
+                     static_cast<unsigned>(it->residency_class),
+                     static_cast<unsigned>(it->protect_passes));
+            if (it->size_bytes <= projectedBytes)
+                projectedBytes -= it->size_bytes;
+            else
+                projectedBytes = 0;
+        }
+    };
+    markFrom(lowClass);
+    markFrom(highClass);
+
+    // Last resort: force-evict tail if still over budget
+    if (projectedBytes > DEFAULT_POOL_BUDGET_BYTES && !s_defaultPoolLru.empty()) {
+        auto it = std::prev(s_defaultPoolLru.end());
+        if (!it->pending_eviction) {
+            it->pending_eviction = true;
+            s_hasPendingEvictions = true;
+        }
+    }
+
     ReleaseSRWLockExclusive(&s_defaultPoolLock);
 }
 
 static void ApplyPendingEvictions() {
+    if (!s_hasPendingEvictions) return;
     AcquireSRWLockExclusive(&s_defaultPoolLock);
     for (auto it = s_defaultPoolLru.begin(); it != s_defaultPoolLru.end();) {
         if (!it->pending_eviction) {
@@ -1207,6 +1222,7 @@ static void ApplyPendingEvictions() {
         it = s_defaultPoolLru.erase(it);
         InterlockedIncrement(&s_stat_default_evictions);
     }
+    s_hasPendingEvictions = false;
     ReleaseSRWLockExclusive(&s_defaultPoolLock);
 }
 
@@ -1421,33 +1437,60 @@ static bool ReconnectServer() {
     return ok;
 }
 
-static int32_t SendToServer(const char *path, const uint8_t *rawData,
-                            uint32_t rawSize, uint8_t priority,
-                            TBProto::Response *outResp) {
-    // Retry pipe open up to 3 times on ERROR_PIPE_BUSY (231).
-    HANDLE pipe = INVALID_HANDLE_VALUE;
+// ── Persistent pipe connection (P8) ─────────────────────────────────
+
+static HANDLE s_workerPipe = INVALID_HANDLE_VALUE;
+static HANDLE s_mainPipe   = INVALID_HANDLE_VALUE;
+static DWORD  s_workerThreadId = 0;
+
+static HANDLE& GetThreadPipe() {
+    return (GetCurrentThreadId() == s_workerThreadId) ? s_workerPipe : s_mainPipe;
+}
+
+static void CloseIfValid(HANDLE &h) {
+    if (h != INVALID_HANDLE_VALUE) { CloseHandle(h); h = INVALID_HANDLE_VALUE; }
+}
+
+static HANDLE AcquirePersistentPipe() {
+    HANDLE &h = GetThreadPipe();
+    if (h != INVALID_HANDLE_VALUE)
+        return h;
+    // Retry pipe open up to 3 times on ERROR_PIPE_BUSY.
     for (int attempt = 0; attempt < 3; ++attempt) {
-        pipe = CreateFileA(
-            TBProto::PIPE_NAME, GENERIC_READ | GENERIC_WRITE,
-            0, nullptr, OPEN_EXISTING, 0, nullptr);
-        if (pipe != INVALID_HANDLE_VALUE)
-            break;
+        h = CreateFileA(TBProto::PIPE_NAME, GENERIC_READ | GENERIC_WRITE,
+                        0, nullptr, OPEN_EXISTING, 0, nullptr);
+        if (h != INVALID_HANDLE_VALUE) return h;
         DWORD err = GetLastError();
         if (err == ERROR_PIPE_BUSY) {
-            // Wait up to 500ms for a pipe instance to become available.
             WaitNamedPipeA(TBProto::PIPE_NAME, 500);
             continue;
         }
-        if (attempt == 0 && err == ERROR_FILE_NOT_FOUND) {
-            if (ReconnectServer())
-                continue;
-        }
-        LogWrite("SendToServer: pipe open failed, err=%lu", err);
-        return -1;
+        break;
     }
+    return h;  // may be INVALID_HANDLE_VALUE
+}
+
+static void InvalidatePersistentPipe() {
+    CloseIfValid(GetThreadPipe());
+}
+
+static void ClosePersistentPipes() {
+    CloseIfValid(s_workerPipe);
+    CloseIfValid(s_mainPipe);
+}
+
+static int32_t SendToServer(const char *path, const uint8_t *rawData,
+                            uint32_t rawSize, uint8_t priority,
+                            TBProto::Response *outResp) {
+    HANDLE pipe = AcquirePersistentPipe();
     if (pipe == INVALID_HANDLE_VALUE) {
-        LogWrite("SendToServer: pipe busy after 3 retries for '%s'", path);
-        return -1;
+        DWORD err = GetLastError();
+        if (err == ERROR_FILE_NOT_FOUND && ReconnectServer())
+            pipe = AcquirePersistentPipe();
+        if (pipe == INVALID_HANDLE_VALUE) {
+            LogWrite("SendToServer: pipe open failed, err=%lu", err);
+            return -1;
+        }
     }
 
     uint16_t pathLen = static_cast<uint16_t>(strlen(path));
@@ -1466,16 +1509,16 @@ static int32_t SendToServer(const char *path, const uint8_t *rawData,
 
     if (!ok) {
         LogWrite("SendToServer: pipe write failed for '%s'", path);
-        CloseHandle(pipe);
+        InvalidatePersistentPipe();
         return -1;
     }
 
     TBProto::Response resp{};
     ok = ReadPipeFull(pipe, &resp, sizeof(resp));
-    CloseHandle(pipe);
 
     if (!ok) {
         LogWrite("SendToServer: pipe read failed for '%s'", path);
+        InvalidatePersistentPipe();
         return -1;
     }
 
@@ -1609,6 +1652,7 @@ static bool IsSwapWorldDeferred() {
 // ══════════════════════════════════════════════════════════════════════
 
 static DWORD WINAPI DecodeWorkerProc(LPVOID /*param*/) {
+    s_workerThreadId = GetCurrentThreadId();
     LogWrite("Worker thread started");
     while (s_workerRunning) {
         DecodeRequest req;
@@ -1616,7 +1660,7 @@ static DWORD WINAPI DecodeWorkerProc(LPVOID /*param*/) {
         {
             AcquireSRWLockExclusive(&s_queueLock);
             while (s_queue.empty() && s_workerRunning) {
-                SleepConditionVariableSRW(&s_queueCV, &s_queueLock, 200, 0);
+                SleepConditionVariableSRW(&s_queueCV, &s_queueLock, 50, 0);
             }
             if (!s_workerRunning && s_queue.empty()) {
                 ReleaseSRWLockExclusive(&s_queueLock);
@@ -1658,6 +1702,10 @@ static DWORD WINAPI DecodeWorkerProc(LPVOID /*param*/) {
 
             AcquireSRWLockExclusive(&s_cacheLock);
             s_cache[req.path_hash] = entry;
+            // Arbitrary eviction (unordered_map has no ordering). Acceptable
+            // because this is only a hint cache; the server holds the real LRU.
+            if (s_cache.size() > 4096)
+                s_cache.erase(s_cache.begin());
             ReleaseSRWLockExclusive(&s_cacheLock);
 
             // Release the slot immediately — the server's LRU cache holds
@@ -1676,11 +1724,15 @@ static DWORD WINAPI DecodeWorkerProc(LPVOID /*param*/) {
     return 0;
 }
 
+static unsigned __stdcall DecodeWorkerEntry(void *) {
+    return DecodeWorkerProc(nullptr);
+}
+
 static void StartWorker() {
     if (s_workerThread) return;
     s_workerRunning = true;
-    s_workerThread = CreateThread(nullptr, 0, DecodeWorkerProc,
-                                  nullptr, 0, nullptr);
+    s_workerThread = reinterpret_cast<HANDLE>(
+        _beginthreadex(nullptr, 0, DecodeWorkerEntry, nullptr, 0, nullptr));
     LogWrite("StartWorker: thread=%p", s_workerThread);
 }
 
@@ -1691,6 +1743,7 @@ static void StopWorker() {
     WaitForSingleObject(s_workerThread, 3000);
     CloseHandle(s_workerThread);
     s_workerThread = nullptr;
+    ClosePersistentPipes();
 
     AcquireSRWLockExclusive(&s_queueLock);
     while (!s_queue.empty()) {
@@ -1708,6 +1761,7 @@ static bool QueueDecode(const char *path, int bufIdx, uint32_t rawSize,
     LONG inflight = InterlockedCompareExchange(&s_inflight, 0, 0);
     LONG queued   = InterlockedCompareExchange(&s_queuedBytes, 0, 0);
     if (static_cast<uint32_t>(inflight) >= TBProto::MAX_INFLIGHT ||
+        queued < 0 ||
         static_cast<uint32_t>(queued) + rawSize >
             TBProto::MAX_QUEUE_MB * 1024u * 1024u)
     {
@@ -1727,16 +1781,14 @@ static bool QueueDecode(const char *path, int bufIdx, uint32_t rawSize,
     if (WasRecentDir(dirHash) && req.priority > 32)
         req.priority = 32;
 
-    InterlockedExchangeAdd(&s_queuedBytes, static_cast<LONG>(rawSize));
-
     AcquireSRWLockExclusive(&s_queueLock);
     if (s_pendingDecodes.find(req.path_hash) != s_pendingDecodes.end()) {
         ReleaseSRWLockExclusive(&s_queueLock);
-        InterlockedExchangeAdd(&s_queuedBytes, -static_cast<LONG>(rawSize));
         InterlockedIncrement(&s_stat_decode_dedup_skips);
         return false;
     }
     s_pendingDecodes.insert(req.path_hash);
+    InterlockedExchangeAdd(&s_queuedBytes, static_cast<LONG>(rawSize));
     auto insertIt = s_queue.end();
     for (auto it = s_queue.begin(); it != s_queue.end(); ++it) {
         if (req.priority < it->priority) {
@@ -1872,42 +1924,34 @@ static bool DescribeD3DTexture(void *tex, D3DSurfDesc *outDesc, const char *reas
     if (!tex)
         return false;
 
-    __try {
-        auto vtable = *reinterpret_cast<uint32_t **>(tex);
-        if (!vtable || !vtable[VTIDX_GETTYPE] || !vtable[VTIDX_GETLEVELDESC]) {
-            LogWrite("D3D9_TEXTURE_INVALID: reason=%s tex=%p vtable=%p",
-                     reason ? reason : "unknown",
-                     tex,
-                     vtable);
-            return false;
-        }
-
-        auto fnGetType = reinterpret_cast<GetType_fn>(vtable[VTIDX_GETTYPE]);
-        auto fnGetLevelDesc = reinterpret_cast<GetLevelDesc_fn>(vtable[VTIDX_GETLEVELDESC]);
-        uint32_t resourceType = fnGetType(tex);
-        D3DSurfDesc desc{};
-        HRESULT hr = fnGetLevelDesc(tex, 0, &desc);
-        if (resourceType != D3DRTYPE_TEXTURE || FAILED(hr) || desc.Width == 0 || desc.Height == 0) {
-            LogWrite("D3D9_TEXTURE_INVALID: reason=%s tex=%p type=%u hr=0x%08lX dims=%ux%u pool=%u",
-                     reason ? reason : "unknown",
-                     tex,
-                     static_cast<unsigned>(resourceType),
-                     static_cast<unsigned long>(hr),
-                     static_cast<unsigned>(desc.Width),
-                     static_cast<unsigned>(desc.Height),
-                     static_cast<unsigned>(desc.Pool));
-            return false;
-        }
-
-        if (outDesc)
-            *outDesc = desc;
-        return true;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        LogWrite("D3D9_TEXTURE_INVALID: reason=%s tex=%p access-violation",
-                 reason ? reason : "unknown",
-                 tex);
+    const char *tag = reason ? reason : "unknown";
+    auto *vtable = ValidateD3DObject(tex, (VTIDX_GETLEVELDESC + 1) * sizeof(uint32_t), tag);
+    if (!vtable) return false;
+    if (!vtable[VTIDX_GETTYPE] || !vtable[VTIDX_GETLEVELDESC]) {
+        LogWrite("D3D9_TEXTURE_INVALID: reason=%s tex=%p vtable=%p null-entry", tag, tex, vtable);
         return false;
     }
+
+    auto fnGetType = reinterpret_cast<GetType_fn>(vtable[VTIDX_GETTYPE]);
+    auto fnGetLevelDesc = reinterpret_cast<GetLevelDesc_fn>(vtable[VTIDX_GETLEVELDESC]);
+    uint32_t resourceType = fnGetType(tex);
+    D3DSurfDesc desc{};
+    HRESULT hr = fnGetLevelDesc(tex, 0, &desc);
+    if (resourceType != D3DRTYPE_TEXTURE || FAILED(hr) || desc.Width == 0 || desc.Height == 0) {
+        LogWrite("D3D9_TEXTURE_INVALID: reason=%s tex=%p type=%u hr=0x%08lX dims=%ux%u pool=%u",
+                 tag,
+                 tex,
+                 static_cast<unsigned>(resourceType),
+                 static_cast<unsigned long>(hr),
+                 static_cast<unsigned>(desc.Width),
+                 static_cast<unsigned>(desc.Height),
+                 static_cast<unsigned>(desc.Pool));
+        return false;
+    }
+
+    if (outDesc)
+        *outDesc = desc;
+    return true;
 }
 
 static bool IsLiveTextureBindingUsable(void *liveTex, void *expectedDefaultTex,
@@ -1958,7 +2002,7 @@ static bool TrySwapToDefaultPool(Game::HTEXTURE__ *texture, Game::CGxTex *gxTex,
     }
 
     std::string inlinePath;
-    if (ReadInlineTexturePath(texture, path, inlinePath) &&
+    if (path && *path && ReadInlineTexturePath(texture, path, inlinePath) &&
         !ComparablePathMatchesStored(inlinePath, path)) {
         LogInlinePathMismatchOnce(pathHash, path, inlinePath.c_str());
         QuarantineTextureSwap(textureKey, pathHash, path, "inline-path-mismatch");
@@ -2192,7 +2236,11 @@ static void ProbeTextureStruct(Game::HTEXTURE__ *tex, uint64_t pathHash,
     if (!cached.valid || cached.width == 0 || cached.height == 0)
         return;
 
-    __try {
+    {
+        if (IsBadReadPtr(tex, OFF_HTEX_ASYNC_REQ + 4)) {
+            LogWrite("PROBE: bad-ptr tex=%p", tex);
+            return;
+        }
         const uint32_t *words = reinterpret_cast<const uint32_t *>(tex);
 
         LONG probeIdx = InterlockedIncrement(&s_probedCount);
@@ -2305,9 +2353,6 @@ static void ProbeTextureStruct(Game::HTEXTURE__ *tex, uint64_t pathHash,
 
         InterlockedIncrement(&s_stat_probed);
     }
-    __except (EXCEPTION_EXECUTE_HANDLER) {
-        LogWrite("PROBE: ACCESS VIOLATION reading tex=%p gxTex=%p", tex, gxTex);
-    }
 }
 
 static Game::CGxTex * __fastcall TextureGetGxTex_h(
@@ -2318,16 +2363,28 @@ static Game::CGxTex * __fastcall TextureGetGxTex_h(
     InterlockedIncrement(&s_stat_gxtex_calls);
 
     uintptr_t textureKey = texture ? reinterpret_cast<uintptr_t>(texture) : 0;
-    std::string trackedPath;
+
+    // Fast path: check if texture is tracked before doing any heavy work
     uint64_t pathHash = 0;
-    if (texture) {
+    if (textureKey) {
+        AcquireSRWLockShared(&s_texMapLock);
+        auto hashIt = s_texMap.find(textureKey);
+        if (hashIt != s_texMap.end()) pathHash = hashIt->second;
+        ReleaseSRWLockShared(&s_texMapLock);
+    }
+
+    // Untracked textures: call original and return immediately (majority of calls)
+    if (pathHash == 0) {
+        return TextureGetGxTex_o(texture, edx, status);
+    }
+
+    // Tracked texture: read the full path for Phase 2 processing
+    std::string trackedPath;
+    {
         AcquireSRWLockShared(&s_texMapLock);
         auto pathIt = s_texPathMap.find(textureKey);
         if (pathIt != s_texPathMap.end())
             trackedPath = pathIt->second;
-        auto hashIt = s_texMap.find(textureKey);
-        if (hashIt != s_texMap.end())
-            pathHash = hashIt->second;
         ReleaseSRWLockShared(&s_texMapLock);
     }
 
@@ -2347,14 +2404,6 @@ static Game::CGxTex * __fastcall TextureGetGxTex_h(
     if (pathHash == 0)
         return gxTex;
 
-    std::string texturePath;
-    {
-        AcquireSRWLockShared(&s_texMapLock);
-        auto it = s_texPathMap.find(reinterpret_cast<uintptr_t>(texture));
-        if (it != s_texPathMap.end())
-            texturePath = it->second;
-        ReleaseSRWLockShared(&s_texMapLock);
-    }
     if (IsTextureQuarantined(textureKey, pathHash))
         return gxTex;
 
@@ -2368,11 +2417,8 @@ static Game::CGxTex * __fastcall TextureGetGxTex_h(
         inCache = (it != s_cache.end() && it->second.valid);
         ReleaseSRWLockShared(&s_cacheLock);
     }
-    TryReleasePendingMain0573Payload(textureKey, pathHash, texturePath,
-                                     EnsureHelperTextureAvailable(texturePath, inCache));
-
-    ApplyPendingEvictions();
-    MarkEvictionsForBudget();
+    TryReleasePendingMain0573Payload(textureKey, pathHash, trackedPath,
+                                     EnsureHelperTextureAvailable(trackedPath, inCache));
 
     if (IsTrackedBindingStale(texture, gxTex, pathHash)) {
         LogWrite("DEFAULT_SWAP_STALE_TRACK: texture=%p gxTex=%p pathHash=0x%llX",
@@ -2385,11 +2431,11 @@ static Game::CGxTex * __fastcall TextureGetGxTex_h(
 
     TouchDefaultPoolEntry(textureKey, pathHash);
 
-    if (!texturePath.empty() && inCache) {
+    if (!trackedPath.empty() && inCache) {
         const uint32_t *gxWords = reinterpret_cast<const uint32_t *>(gxTex);
         void *managedTex = reinterpret_cast<void *>(gxWords[OFF_GX_D3DTEX / 4]);
         if (managedTex) {
-            TrySwapToDefaultPool(texture, gxTex, pathHash, texturePath.c_str());
+            TrySwapToDefaultPool(texture, gxTex, pathHash, trackedPath.c_str());
         } else {
             AcquireSRWLockExclusive(&s_probedSetLock);
             s_probedSet.erase(textureKey);
@@ -2449,6 +2495,8 @@ static Game::HTEXTURE__ * __fastcall TextureCreate_h(
     const bool shouldTrackCpu = s_initialized && s_server_available && IsTextureFile(filename) &&
                                 ShouldQueueDecodeForPath(filename);
 
+    uint64_t pathHash = 0;
+
     // Quick checks before any work.
     if (shouldTrackCpu) {
 
@@ -2460,7 +2508,7 @@ static Game::HTEXTURE__ * __fastcall TextureCreate_h(
             LogWrite("TextureCreate_h: #%ld '%s'", count, filename);
 
         // Already cached?
-        uint64_t pathHash = TBProto::HashPath(filename);
+        pathHash = TBProto::HashPath(filename);
         bool alreadyCached = false;
         {
             AcquireSRWLockShared(&s_cacheLock);
@@ -2507,7 +2555,7 @@ static Game::HTEXTURE__ * __fastcall TextureCreate_h(
 
     // Phase 2: record HTEXTURE* → pathHash for struct probing and lifecycle tracking.
     if (htex && shouldTrackCpu) {
-        uint64_t ph = TBProto::HashPath(filename);
+        uint64_t ph = pathHash;
         uintptr_t textureKey = reinterpret_cast<uintptr_t>(htex);
         bool pathChanged = false;
         AcquireSRWLockExclusive(&s_texMapLock);
@@ -2603,6 +2651,7 @@ static void __fastcall TextureAllocFreePayload_h(void *thisptr, void * /*edx*/, 
     TextureAllocFreePayload_o(thisptr, nullptr, payload, arg2, arg3);
 }
 
+#ifdef _MSC_VER
 static __declspec(naked) void TextureDestroy_h() {
     __asm {
         pushad
@@ -2615,6 +2664,24 @@ static __declspec(naked) void TextureDestroy_h() {
         jmp dword ptr [TextureDestroy_o]
     }
 }
+#else
+__attribute__((naked)) static void TextureDestroy_h() {
+    asm volatile(
+        ".intel_syntax noprefix\n\t"
+        "pushad\n\t"
+        "pushfd\n\t"
+        "push edi\n\t"
+        "call %P0\n\t"
+        "add esp, 4\n\t"
+        "popfd\n\t"
+        "popad\n\t"
+        "jmp dword ptr [%1]\n\t"
+        ".att_syntax\n\t"
+        :: "i"(OnTextureDestroy),
+           "m"(TextureDestroy_o)
+    );
+}
+#endif
 
 // ══════════════════════════════════════════════════════════════════════
 //  Public API
@@ -2659,8 +2726,22 @@ bool EnsureServerRunning() {
     std::string exePath = std::string(s_dllDir) + "TextureServer64.exe";
     LogWrite("EnsureServerRunning: looking for '%s'", exePath.c_str());
 
-    DWORD attrs = GetFileAttributesA(exePath.c_str());
-    if (attrs == INVALID_FILE_ATTRIBUTES) {
+    bool exeFound = (GetFileAttributesA(exePath.c_str()) != INVALID_FILE_ATTRIBUTES);
+    if (!exeFound) {
+        // Fallback: try parent directory (game root, one level up from mods/)
+        std::string parentDir(s_dllDir);
+        size_t lastSlash = parentDir.find_last_of("\\/", parentDir.size() - 2);
+        if (lastSlash != std::string::npos) {
+            parentDir = parentDir.substr(0, lastSlash + 1);
+            std::string parentExe = parentDir + "TextureServer64.exe";
+            LogWrite("EnsureServerRunning: trying parent dir '%s'", parentExe.c_str());
+            if (GetFileAttributesA(parentExe.c_str()) != INVALID_FILE_ATTRIBUTES) {
+                exePath = parentExe;
+                exeFound = true;
+            }
+        }
+    }
+    if (!exeFound) {
         LogWrite("EnsureServerRunning: exe NOT FOUND (err=%lu)", GetLastError());
         return false;
     }
@@ -2703,24 +2784,43 @@ bool EnsureServerRunning() {
     CloseHandle(pi.hProcess);
     CloseHandle(pi.hThread);
 
-    // Poll for shared memory (up to 3 seconds).
-    for (int i = 0; i < 30; i++) {
-        Sleep(100);
-        if (OpenSharedMemory()) {
-            s_server_available = true;
-            StartWorker();
-            LogWrite("EnsureServerRunning: SHM connected after %d ms", (i + 1) * 100);
-            return true;
+    // Try event-based wait first (fast path for new server).
+    bool connected = false;
+    HANDLE hReady = nullptr;
+    for (int retry = 0; retry < 10 && !hReady; ++retry) {
+        hReady = OpenEventA(SYNCHRONIZE, FALSE, "VH_TexServer_ShmReady");
+        if (!hReady) Sleep(50);
+    }
+    if (hReady) {
+        if (WaitForSingleObject(hReady, 3000) == WAIT_OBJECT_0)
+            connected = OpenSharedMemory();
+        CloseHandle(hReady);
+    }
+    // Fallback: polling for older server versions.
+    if (!connected) {
+        for (int i = 0; i < 30 && !connected; i++) {
+            Sleep(100);
+            connected = OpenSharedMemory();
         }
     }
-
+    if (connected) {
+        s_server_available = true;
+        StartWorker();
+        LogWrite("EnsureServerRunning: SHM connected");
+        return true;
+    }
     LogWrite("EnsureServerRunning: TIMEOUT waiting for SHM");
     return false;
 }
 
+static bool s_hooksInstalled = false;
+
 bool InstallHooks() {
-    LogWrite("InstallHooks: initialized=%d server_available=%d",
-             s_initialized, s_server_available);
+    LogWrite("InstallHooks: initialized=%d server_available=%d hooksInstalled=%d",
+             s_initialized, s_server_available, s_hooksInstalled);
+
+    if (s_hooksInstalled)
+        return true;
 
     if (!s_initialized || !s_server_available) {
         LogWrite("InstallHooks: skipping (no server)");
@@ -2759,6 +2859,7 @@ bool InstallHooks() {
     LogWrite("InstallHooks: deferring live swap/probe work for %lu ms",
              static_cast<unsigned long>(SWAP_STARTUP_GRACE_MS));
 
+    s_hooksInstalled = true;
     return true;
 }
 
@@ -2766,7 +2867,7 @@ void Shutdown(bool terminateServer) {
     LogWrite("Shutdown: terminateServer=%d", terminateServer ? 1 : 0);
     if (terminateServer) {
         LogWrite("Shutdown: stopping worker...");
-        StopWorker();
+        StopWorker();  // also closes persistent pipes
 
         // Send shutdown to server (best-effort).
         if (s_server_available) {
@@ -2870,6 +2971,11 @@ void Shutdown(bool terminateServer) {
 void OnFrameTick() {
     ApplyPendingEvictions();
     MarkEvictionsForBudget();
+
+    // Flush log once per frame instead of per-line.
+    // fflush is thread-safe on Windows (CRT serializes stdio internally).
+    if (s_logFile)
+        fflush(s_logFile);
 }
 
 bool GetDecodedTexture(const char *path, const void *rawData, uint32_t rawSize,
@@ -2913,6 +3019,7 @@ bool GetDecodedTexture(const char *path, const void *rawData, uint32_t rawSize,
                 info.pixels    = pixels;
                 return true;
             }
+            ReleaseSlot(slot);
         }
 
         if (resp.status == TBProto::STATUS_NOT_FOUND) {
@@ -2974,8 +3081,8 @@ bool GetDecodedTexture(const char *path, const void *rawData, uint32_t rawSize,
 
     const TBProto::SlotHeader *sh = GetSlotHeader(slot);
     const uint8_t *pixels = GetSlotData(slot);
-    if (!sh || !pixels) return false;
-    if (sh->state != TBProto::STATE_READY) return false;
+    if (!sh || !pixels) { ReleaseSlot(slot); return false; }
+    if (sh->state != TBProto::STATE_READY) { ReleaseSlot(slot); return false; }
 
     info.slot      = slot;
     info.width     = sh->width;

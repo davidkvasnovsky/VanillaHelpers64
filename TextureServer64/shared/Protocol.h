@@ -21,6 +21,14 @@ constexpr uint32_t SHM_HEADER     = 4096;
 constexpr uint64_t SHM_TOTAL_SIZE = static_cast<uint64_t>(SHM_HEADER)
                                   + static_cast<uint64_t>(SLOT_COUNT) * SLOT_TOTAL;
 
+// ── Windowed shared-memory layout ──────────────────────────────────────
+// Slot data is split across multiple file mappings to avoid a single huge mapping.
+constexpr uint32_t SHM_WINDOW_COUNT     = 4;
+constexpr uint32_t SLOTS_PER_WINDOW     = SLOT_COUNT / SHM_WINDOW_COUNT;
+constexpr uint64_t SHM_DATA_WINDOW_SIZE =
+    static_cast<uint64_t>(SLOTS_PER_WINDOW) * SLOT_TOTAL;
+constexpr const char *SHM_DATA_NAME_PREFIX = "VH_TexServer_SharedMem_Data";
+
 // ── Command enum (client -> server) ─────────────────────────────────────
 enum class Cmd : uint8_t {
     Load     = 0x01,

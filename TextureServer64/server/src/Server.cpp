@@ -61,6 +61,11 @@ bool Server::Start() {
     }
 
     running_.store(true, std::memory_order_release);
+
+    // Signal client-side event-based wait (M2).
+    shm_ready_event_ = CreateEventA(nullptr, TRUE, FALSE, "VH_TexServer_ShmReady");
+    if (shm_ready_event_) SetEvent(shm_ready_event_);
+
     printf("[TextureServer] Shared memory created OK. Slots=%u, SlotDataSize=%u KiB, Windows=%u, SlotsPerWindow=%u\n",
            TexProto::SLOT_COUNT, TexProto::SLOT_DATA_SIZE / 1024,
            TexProto::SHM_WINDOW_COUNT, TexProto::SLOTS_PER_WINDOW);
@@ -73,7 +78,14 @@ bool Server::Start() {
 }
 
 void Server::Stop() {
-    running_.store(false, std::memory_order_release);
+    bool was_running = running_.exchange(false, std::memory_order_acq_rel);
+    if (was_running) {
+        if (shm_ready_event_) { CloseHandle(shm_ready_event_); shm_ready_event_ = nullptr; }
+        // Unblock ConnectNamedPipe on the accept thread.
+        HANDLE dummy = CreateFileA(TexProto::PIPE_NAME, GENERIC_READ | GENERIC_WRITE,
+                                   0, nullptr, OPEN_EXISTING, 0, nullptr);
+        if (dummy != INVALID_HANDLE_VALUE) CloseHandle(dummy);
+    }
 }
 
 // ── Named-pipe accept loop ─────────────────────────────────────────────────
@@ -120,12 +132,12 @@ void Server::Run() {
         printf("[TextureServer] Client connected!\n");
         fflush(stdout);
 
-        // Handle all requests from this client on the accept thread.
-        HandleClient(pipe);
-
-        FlushFileBuffers(pipe);
-        DisconnectNamedPipe(pipe);
-        CloseHandle(pipe);
+        pool_.Submit([this, pipe]() {
+            HandleClient(pipe);
+            FlushFileBuffers(pipe);
+            DisconnectNamedPipe(pipe);
+            CloseHandle(pipe);
+        });
     }
 
     printf("[TextureServer] Shutting down. Waiting for in-flight decodes...\n");

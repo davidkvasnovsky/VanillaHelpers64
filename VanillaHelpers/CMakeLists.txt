@@ -51,11 +51,16 @@ target_include_directories(
                           external/minhook/include)
 
 # Set the output name for the DLL
-set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "VanillaHelpers")
+set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "VanillaHelpers" PREFIX "")
 
-# Use static runtime and optimize for smaller size
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MT")
-set(CMAKE_CXX_FLAGS_RELEASE "/MT /O2 /Ob2 /DNDEBUG")
-set(CMAKE_SHARED_LINKER_FLAGS
-    "/OPT:REF /OPT:ICF /MERGE:.rdata=.text /MERGE:.pdata=.text /SECTION:.text,EWR /NODEFAULTLIB:MSVCRT"
-)
+if(MSVC)
+  # Use static runtime and optimize for smaller size
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MT")
+  set(CMAKE_CXX_FLAGS_RELEASE "/MT /O2 /Ob2 /DNDEBUG")
+  set(CMAKE_SHARED_LINKER_FLAGS
+      "/OPT:REF /OPT:ICF /MERGE:.rdata=.text /MERGE:.pdata=.text /SECTION:.text,EWR /NODEFAULTLIB:MSVCRT"
+  )
+elseif(MINGW)
+  target_compile_options(${PROJECT_NAME} PRIVATE -O2 -flto -fno-exceptions -fno-rtti -DNDEBUG -D_USE_32BIT_TIME_T)
+  target_link_options(${PROJECT_NAME} PRIVATE -static -static-libgcc -static-libstdc++ -flto -s -Wl,--exclude-all-symbols -Wl,-Bstatic -lmsvcrt -Wl,-Bdynamic)
+endif()

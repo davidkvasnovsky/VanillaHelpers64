@@ -11,12 +11,14 @@
 // You should have received a copy of the GNU Lessed General Public License along with
 // VanillaHelpers. If not, see <https://www.gnu.org/licenses/>.
 
+#include <cstddef>
+
 namespace Common {
 
 #define HOOK_FUNCTION(offset, hook, original)                                                      \
     {                                                                                              \
         auto *target = reinterpret_cast<LPVOID>(offset);                                           \
-        if (MH_CreateHook(target, static_cast<LPVOID>(hook),                                       \
+        if (MH_CreateHook(target, reinterpret_cast<LPVOID>(hook),                                  \
                           reinterpret_cast<LPVOID *>(&original)) != MH_OK)                         \
             return FALSE;                                                                          \
         if (MH_EnableHook(target) != MH_OK)                                                        \

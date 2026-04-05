@@ -54,31 +54,40 @@ static void PatchTextureSizeLimit() {
                        sizeof(maxSize));
 }
 
+#ifdef _MSC_VER
 static __declspec(naked) void AsyncTextureWait_Atomic_h() {
     __asm {
-        // Save req pointer: req = [EDI + 0x138]
-        mov     ecx, [edi + 0x138] // ECX = req
-
-            // Atomic test-and-set on a per-object guard byte at [this + 0x155]
-        xor     eax, eax // AL = 0 (expected)
-        mov     dl, 1 // DL = 1 (new)
+        mov     ecx, [edi + 0x138]
+        xor     eax, eax
+        mov     dl, 1
         lock cmpxchg byte ptr [edi + 0x155], dl
-
-            // Pop the two pushes performed just before 0x44AD6F
-        add     esp, 8
-
-        // ZF=1 => we transitioned 0->1: go do unlink (0x44AD7F)
+        lea     esp, [esp + 8]
         jz      first
-
-            // ZF=0 => someone else already set it: original JNZ target (0x44ADEB)
         jmp     dword ptr [g_asyncJmpAlready]
-
 first:
-        // 0x44AD7F expects EAX=req
         mov     eax, ecx
         jmp     dword ptr [g_asyncJmpUnlink]
     }
 }
+#else
+__attribute__((naked)) static void AsyncTextureWait_Atomic_h() {
+    asm volatile(
+        ".intel_syntax noprefix\n\t"
+        "mov ecx, [edi + 0x138]\n\t"
+        "xor eax, eax\n\t"
+        "mov dl, 1\n\t"
+        "lock cmpxchg byte ptr [edi + 0x155], dl\n\t"
+        "lea esp, [esp + 8]\n\t"
+        "jz 1f\n\t"
+        "jmp dword ptr [%0]\n\t"
+        "1:\n\t"
+        "mov eax, ecx\n\t"
+        "jmp dword ptr [%1]\n\t"
+        ".att_syntax\n\t"
+        :: "m"(g_asyncJmpAlready), "m"(g_asyncJmpUnlink)
+    );
+}
+#endif
 
 static void InstallNewAsyncFileBuffer() {
     const uint32_t newSize = 0x2000000; // 32 MiB
@@ -340,7 +349,7 @@ bool InstallHooks() {
     g_asyncJmpAlready = reinterpret_cast<void *>(Offsets::PATCH_ASYNC_TEXTURE_WAIT_ATOMIC_ALREADY);
 
     auto *target = reinterpret_cast<LPVOID>(Offsets::PATCH_ASYNC_TEXTURE_WAIT_ATOMIC);
-    if (MH_CreateHook(target, static_cast<LPVOID>(AsyncTextureWait_Atomic_h), nullptr) != MH_OK)
+    if (MH_CreateHook(target, reinterpret_cast<LPVOID>(AsyncTextureWait_Atomic_h), nullptr) != MH_OK)
         return FALSE;
     if (MH_EnableHook(target) != MH_OK)
         return FALSE;

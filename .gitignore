@@ -42,3 +42,8 @@
 
 # debug information files
 *.dwo
+build/
+build-server/
+TextureServer64/build/
+*.obj
+*.o

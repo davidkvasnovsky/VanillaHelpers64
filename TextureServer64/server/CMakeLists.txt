@@ -21,9 +21,14 @@ target_compile_definitions(TextureServer64 PRIVATE
     NOMINMAX
 )
 
-# Static runtime (/MT) to match VanillaHelpers and avoid CRT DLL dependency.
-set_property(TARGET TextureServer64 PROPERTY
-    MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+# Static runtime to avoid CRT DLL dependency.
+if(MSVC)
+    set_property(TARGET TextureServer64 PROPERTY
+        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+elseif(MINGW)
+    target_compile_options(TextureServer64 PRIVATE -O2 -fno-exceptions -fno-rtti)
+    target_link_options(TextureServer64 PRIVATE -static -static-libgcc -static-libstdc++ -s)
+endif()
 
 # ── Tests ────────────────────────────────────────────────────────────────
 

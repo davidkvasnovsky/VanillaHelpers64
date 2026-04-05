@@ -254,7 +254,10 @@ bool BlpDecoder::DecodePalette(const uint8_t* data, size_t size,
     if (static_cast<uint64_t>(mip0_offset) + mip0_size > size)
         return false;
 
-    uint32_t pixel_count = info.width * info.height;
+    uint64_t pixel_count_64 = static_cast<uint64_t>(info.width) * info.height;
+    if (pixel_count_64 > 8192u * 8192u)
+        return false;
+    uint32_t pixel_count = static_cast<uint32_t>(pixel_count_64);
     if (mip0_size < pixel_count)
         return false;
 
@@ -326,12 +329,23 @@ bool BlpDecoder::DecodeDxt(const uint8_t* data, size_t size,
         total_size += mip_sz;
     }
 
+    // Check if mips are stored contiguously — common in WoW BLPs
+    bool contiguous = (info.mip_count > 0);
+    for (uint32_t i = 1; i < info.mip_count && contiguous; ++i) {
+        contiguous = (info.mip_offsets[i] == info.mip_offsets[i - 1] + info.mip_sizes[i - 1]);
+    }
+
     result.pixels.clear();
-    result.pixels.reserve(total_size);
-    for (uint32_t i = 0; i < info.mip_count; ++i) {
-        uint32_t mip_off = info.mip_offsets[i];
-        uint32_t mip_sz  = info.mip_sizes[i];
-        result.pixels.insert(result.pixels.end(), data + mip_off, data + mip_off + mip_sz);
+    if (contiguous && info.mip_count > 0) {
+        uint32_t start = info.mip_offsets[0];
+        result.pixels.assign(data + start, data + start + total_size);
+    } else {
+        result.pixels.reserve(total_size);
+        for (uint32_t i = 0; i < info.mip_count; ++i) {
+            uint32_t mip_off = info.mip_offsets[i];
+            uint32_t mip_sz  = info.mip_sizes[i];
+            result.pixels.insert(result.pixels.end(), data + mip_off, data + mip_off + mip_sz);
+        }
     }
     result.width  = info.width;
     result.height = info.height;

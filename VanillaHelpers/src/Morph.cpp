@@ -20,6 +20,7 @@
 #include <memory>
 #include <unordered_map>
 #include <variant>
+#include <vector>
 
 namespace Morph {
 
@@ -404,7 +405,8 @@ static void ApplyField(Game::CGPlayer_C *unit, uint32_t fieldIndex) {
 
 static int __fastcall CGObject_C_SetBlock_h(Game::CGObject_C *thisptr, void * /*edx*/,
                                             uint32_t fieldIndex, uint32_t value) {
-    if (thisptr->m_objectType != Game::OBJECT_TYPE::PLAYER) {
+    if (thisptr->m_objectType != Game::OBJECT_TYPE::PLAYER ||
+        (g_overrides.empty() && g_remap.empty())) {
         return CGObject_C_SetBlock_o(thisptr, fieldIndex, value);
     }
 
