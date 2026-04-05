@@ -103,7 +103,8 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID lpReserved) {
             return FALSE;
     } else if (reason == DLL_PROCESS_DETACH) {
         TexBridge::Shutdown(true);
-        MH_Uninitialize();
+        // Skip MH_Uninitialize — process is exiting, unhooking is unnecessary
+        // and can interfere with MinGW's CRT cleanup under Wine.
     }
     return TRUE;
 }

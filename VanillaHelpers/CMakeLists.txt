@@ -61,6 +61,6 @@ if(MSVC)
       "/OPT:REF /OPT:ICF /MERGE:.rdata=.text /MERGE:.pdata=.text /SECTION:.text,EWR /NODEFAULTLIB:MSVCRT"
   )
 elseif(MINGW)
-  target_compile_options(${PROJECT_NAME} PRIVATE -O2 -flto -fno-exceptions -fno-rtti -DNDEBUG -D_USE_32BIT_TIME_T)
-  target_link_options(${PROJECT_NAME} PRIVATE -static -static-libgcc -static-libstdc++ -flto -s -Wl,--exclude-all-symbols -Wl,-Bstatic -lmsvcrt -Wl,-Bdynamic)
+  target_compile_options(${PROJECT_NAME} PRIVATE -O2 -flto -fno-exceptions -fno-rtti -DNDEBUG)
+  target_link_options(${PROJECT_NAME} PRIVATE -static -static-libgcc -static-libstdc++ -flto -s)
 endif()
