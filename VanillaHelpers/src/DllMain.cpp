@@ -60,7 +60,6 @@ static void __fastcall CGGameUI_Shutdown_h() {
     Blips::Reset();
 }
 
-__attribute__((dllexport))
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID lpReserved) {
     if (reason == DLL_PROCESS_ATTACH) {
         DisableThreadLibraryCalls(hModule);
