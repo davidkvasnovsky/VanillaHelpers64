@@ -37,8 +37,10 @@ swap path enabled
  
  1. Install VanillaFixes if not already installed
  2. Download latest release from [Releases](https://github.com/paokkerkir/VanillaHelpers64/releases)
- 3. Copy `VanillaHelpers.dll` to the `mods` folder in your game directory
- 4. Copy `TextureServer64.exe` to the `mods` folder or the game root directory (both locations are supported)
+ 3. Copy `VanillaHelpers.dll` to your game directory
+ 4. Copy `TextureServer64.exe` to your game directory
+ 
+ If using **TurtleSilicon**, copy `VanillaHelpers.dll` to the `mods` folder.
  5. Add `VanillaHelpers.dll` to the `dlls.txt` file
  6. Start the game with `WoW.exe`
  
