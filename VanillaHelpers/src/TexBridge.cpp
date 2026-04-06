@@ -864,12 +864,14 @@ static auto IsTargetTexturePath(const char* path) -> bool {
     if (path == nullptr) {
         return false;
     }
+    // Long-lived world/character/item textures only.
+    // Excluded:
+    //   XTEXTURES\\    — animated water/splash frames (high churn, low swap value)
+    //   INTERFACE\\GLUES\\MODELS\\ — login screen only, destroyed on world entry
     return ContainsI(path, "WORLD\\") ||
            ContainsI(path, "CREATURE\\") ||
            ContainsI(path, "CHARACTER\\") ||
-           ContainsI(path, "ITEM\\OBJECTCOMPONENTS\\") ||
-           ContainsI(path, "XTEXTURES\\") ||
-           ContainsI(path, R"(INTERFACE\GLUES\MODELS\)");
+           ContainsI(path, "ITEM\\OBJECTCOMPONENTS\\");
 }
 
 static auto IsDxtFormat(uint8_t format) -> bool {
@@ -2302,7 +2304,7 @@ static auto ResidencyClassForPath(const char* path) -> uint8_t {
         ContainsI(path, R"(ITEM\OBJECTCOMPONENTS\SHIELD\)")) {
         return 2;
     }
-    if (ContainsI(path, "WORLD\\") || ContainsI(path, "XTEXTURES\\")) {
+    if (ContainsI(path, "WORLD\\")) {
         return 1;
     }
     return 0;
@@ -3116,7 +3118,7 @@ static void ProbeTextureStruct(Game::HTEXTURE__* tex, uint64_t pathHash, Game::C
         bool const loaded = (htex_async == 0 && htex_width > 0);
         bool const gxMatch = (htex_gxptr == reinterpret_cast<uint32_t>(gxTex));
 
-        if (probeIdx <= 30) {
+        if (s_fullLogEnabled && probeIdx <= 30) {
             LogWrite(
                 "PROBE #%ld: tex=%p gxTex=%p w=%u h=%u mips=%u "
                 "async=%08X gxOff=%08X gxMatch=%s loaded=%s "
@@ -3142,10 +3144,9 @@ static void ProbeTextureStruct(Game::HTEXTURE__* tex, uint64_t pathHash, Game::C
             return;
         }
 
-        // ── Query D3D9 texture via COM vtable ──
-        // CGxTex+0x048 = IDirect3DTexture9*. Call GetLevelDesc to confirm
-        // pool type (MANAGED vs DEFAULT) and compute memory footprint.
-        if ((gxTex != nullptr) && probeIdx <= 30) {
+        // ── Query D3D9 texture via COM vtable (diagnostic only) ──
+        // Gated behind full-log to avoid COM calls on the hot path.
+        if (s_fullLogEnabled && (gxTex != nullptr) && probeIdx <= 30) {
             const auto* gxWords = reinterpret_cast<const uint32_t*>(gxTex);
             uint32_t const d3dTexPtr = gxWords[OFF_GX_D3DTEX / 4];
 
@@ -3356,27 +3357,26 @@ static Game::CGxTex* __fastcall TextureGetGxTex_h(
         }
     }
 
-    // Only probe each HTEXTURE once.
-    bool alreadyProbed = false;
-    {
-        AcquireSRWLockShared(&s_probedSetLock);
-        alreadyProbed = s_probedSet.contains(textureKey);
-        ReleaseSRWLockShared(&s_probedSetLock);
-    }
-    if (alreadyProbed) {
-        return gxTex;
-    }
-
-    // Mark as probed.
-    {
-        AcquireSRWLockExclusive(&s_probedSetLock);
-        s_probedSet.insert(textureKey);
-        ReleaseSRWLockExclusive(&s_probedSetLock);
-    }
-
-    // Probe if still within limit and texture is in our decode cache.
-    if (s_probedCount.load(std::memory_order_relaxed) < MAX_STRUCT_SCAN && inCache) {
-        ProbeTextureStruct(texture, pathHash, gxTex);
+    // Struct probing is diagnostic only — gate behind full-log to avoid
+    // s_probedSet lock traffic and COM calls on the hot path.
+    if (s_fullLogEnabled) {
+        bool alreadyProbed = false;
+        {
+            AcquireSRWLockShared(&s_probedSetLock);
+            alreadyProbed = s_probedSet.contains(textureKey);
+            ReleaseSRWLockShared(&s_probedSetLock);
+        }
+        if (alreadyProbed) {
+            return gxTex;
+        }
+        {
+            AcquireSRWLockExclusive(&s_probedSetLock);
+            s_probedSet.insert(textureKey);
+            ReleaseSRWLockExclusive(&s_probedSetLock);
+        }
+        if (s_probedCount.load(std::memory_order_relaxed) < MAX_STRUCT_SCAN && inCache) {
+            ProbeTextureStruct(texture, pathHash, gxTex);
+        }
     }
 
     // ── Phase 2b: Free pixel buffer after D3D upload ──
