@@ -97,6 +97,11 @@ struct Response {
 };                            // total: 19 bytes (packed)
 
 // Shared-memory slot header (one per slot, at the start of each SLOT_TOTAL block).
+// NOTE: SlotHeader::state and ShmHeader::sequence use plain `volatile` rather
+// than std::atomic because they reside in cross-process shared memory (32-bit
+// DLL <-> 64-bit server).  std::atomic layout is implementation-defined and
+// may differ between compilers/architectures.  Correctness relies on x86 TSO
+// guarantees and Interlocked* functions at access sites.
 struct SlotHeader {
     volatile uint32_t state;       // 4 bytes — SlotState enum
     uint32_t          width;       // 4 bytes

@@ -141,7 +141,7 @@ static inline bool EvaluateMorphValue(Game::CGPlayer_C *unit, uint32_t fieldInde
     } else if (std::holds_alternative<std::shared_ptr<factionValuesMap_t>>(morphValue)) {
         auto factionReplacementMap = std::get<std::shared_ptr<factionValuesMap_t>>(morphValue);
         const auto *factionTemplate = Game::DbLookupById<Game::FactionTemplate>(
-            Game::g_factionTemplateDB, unit->m_data->m_unitData.m_factionTemplate);
+            *Game::g_factionTemplateDB, unit->m_data->m_unitData.m_factionTemplate);
 
         if (factionTemplate) {
             const auto it = factionReplacementMap->find(factionTemplate->m_faction);

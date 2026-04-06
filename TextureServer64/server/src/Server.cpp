@@ -1,4 +1,5 @@
 #include "Server.h"
+#include "ServerLog.h"
 
 #include <algorithm>
 #include <cctype>
@@ -42,45 +43,42 @@ Server::~Server() {
 // ── Lifecycle ──────────────────────────────────────────────────────────────
 
 bool Server::Start() {
-    printf("[TextureServer] Creating shared memory header (%u bytes = %.1f KiB)...\n",
-           TexProto::SHM_HEADER,
-           static_cast<double>(TexProto::SHM_HEADER) / 1024.0);
-    printf("[TextureServer] Creating %u data windows (%llu bytes each = %.1f MiB, total %.1f MiB)...\n",
-           TexProto::SHM_WINDOW_COUNT,
-           static_cast<unsigned long long>(TexProto::SHM_DATA_WINDOW_SIZE),
-           static_cast<double>(TexProto::SHM_DATA_WINDOW_SIZE) / (1024.0 * 1024.0),
-           static_cast<double>(TexProto::SHM_WINDOW_COUNT) *
-           (static_cast<double>(TexProto::SHM_DATA_WINDOW_SIZE) / (1024.0 * 1024.0)));
-    fflush(stdout);
+    ServerLog("Creating shared memory header (%u bytes = %.1f KiB)...",
+              TexProto::SHM_HEADER,
+              static_cast<double>(TexProto::SHM_HEADER) / 1024.0);
+    ServerLog("Creating %u data windows (%llu bytes each = %.1f MiB, total %.1f MiB)...",
+              TexProto::SHM_WINDOW_COUNT,
+              static_cast<unsigned long long>(TexProto::SHM_DATA_WINDOW_SIZE),
+              static_cast<double>(TexProto::SHM_DATA_WINDOW_SIZE) / (1024.0 * 1024.0),
+              static_cast<double>(TexProto::SHM_WINDOW_COUNT) *
+              (static_cast<double>(TexProto::SHM_DATA_WINDOW_SIZE) / (1024.0 * 1024.0)));
 
     if (!shm_.Create()) {
-        fprintf(stderr, "[TextureServer] ERROR: Failed to create shared memory. GetLastError=%lu\n",
-                GetLastError());
-        fflush(stderr);
+        ServerLogError("Failed to create shared memory. GetLastError=%lu",
+                       GetLastError());
         return false;
     }
 
     running_.store(true, std::memory_order_release);
 
     // Signal client-side event-based wait (M2).
-    shm_ready_event_ = CreateEventA(nullptr, TRUE, FALSE, "VH_TexServer_ShmReady");
-    if (shm_ready_event_) SetEvent(shm_ready_event_);
+    shm_ready_event_.reset(CreateEventA(nullptr, TRUE, FALSE, "VH_TexServer_ShmReady"));
+    if (shm_ready_event_) SetEvent(shm_ready_event_.get());
 
-    printf("[TextureServer] Shared memory created OK. Slots=%u, SlotDataSize=%u KiB, Windows=%u, SlotsPerWindow=%u\n",
-           TexProto::SLOT_COUNT, TexProto::SLOT_DATA_SIZE / 1024,
-           TexProto::SHM_WINDOW_COUNT, TexProto::SLOTS_PER_WINDOW);
-    printf("[TextureServer] Started. PID=%lu, threads=%u, cache_max=%.1f MiB\n",
-           static_cast<unsigned long>(GetCurrentProcessId()),
-           pool_.WorkerCount(),
-           static_cast<double>(config_.cache_max_bytes) / (1024.0 * 1024.0));
-    fflush(stdout);
+    ServerLog("Shared memory created OK. Slots=%u, SlotDataSize=%u KiB, Windows=%u, SlotsPerWindow=%u",
+              TexProto::SLOT_COUNT, TexProto::SLOT_DATA_SIZE / 1024,
+              TexProto::SHM_WINDOW_COUNT, TexProto::SLOTS_PER_WINDOW);
+    ServerLog("Started. PID=%lu, threads=%u, cache_max=%.1f MiB",
+              static_cast<unsigned long>(GetCurrentProcessId()),
+              pool_.WorkerCount(),
+              static_cast<double>(config_.cache_max_bytes) / (1024.0 * 1024.0));
     return true;
 }
 
 void Server::Stop() {
     bool was_running = running_.exchange(false, std::memory_order_acq_rel);
     if (was_running) {
-        if (shm_ready_event_) { CloseHandle(shm_ready_event_); shm_ready_event_ = nullptr; }
+        shm_ready_event_.reset();
         // Unblock ConnectNamedPipe on the accept thread.
         HANDLE dummy = CreateFileA(TexProto::PIPE_NAME, GENERIC_READ | GENERIC_WRITE,
                                    0, nullptr, OPEN_EXISTING, 0, nullptr);
@@ -106,8 +104,7 @@ void Server::Run() {
 
         if (pipe == INVALID_HANDLE_VALUE) {
             if (running_.load(std::memory_order_acquire)) {
-                fprintf(stderr, "[TextureServer] CreateNamedPipe failed: %lu\n",
-                        GetLastError());
+                ServerLogError("CreateNamedPipe failed: %lu", GetLastError());
                 Sleep(100);
             }
             continue;
@@ -119,9 +116,8 @@ void Server::Run() {
                        : (GetLastError() == ERROR_PIPE_CONNECTED ? TRUE : FALSE);
 
         if (!connected || !running_.load(std::memory_order_acquire)) {
-            printf("[TextureServer] ConnectNamedPipe failed or shutting down. err=%lu\n",
-                   GetLastError());
-            fflush(stdout);
+            ServerLog("ConnectNamedPipe failed or shutting down. err=%lu",
+                      GetLastError());
             CloseHandle(pipe);
             continue;
         }
@@ -134,10 +130,10 @@ void Server::Run() {
         });
     }
 
-    printf("[TextureServer] Shutting down. Waiting for in-flight decodes...\n");
+    ServerLog("Shutting down. Waiting for in-flight decodes...");
     pool_.WaitIdle();
     shm_.Destroy();
-    printf("[TextureServer] Shutdown complete.\n");
+    ServerLog("Shutdown complete.");
 }
 
 // ── Per-client request loop ────────────────────────────────────────────────
@@ -153,7 +149,7 @@ void Server::HandleClient(HANDLE pipe) {
 
         // Handle Shutdown.
         if (req.cmd == TexProto::Cmd::Shutdown) {
-            printf("[TextureServer] Received Shutdown command.\n");
+            ServerLog("Received Shutdown command.");
             Stop();
             TexProto::Response resp{};
             resp.status = TexProto::Status::Ok;
@@ -297,9 +293,8 @@ void Server::HandleLoad(HANDLE pipe, const std::string& path,
     inflight_decodes_.fetch_sub(1, std::memory_order_acq_rel);
 
     if (!ok) {
-        printf("[TextureServer] DECODE FAILED: '%s' (%u raw bytes)\n",
-               path.c_str(), static_cast<unsigned>(raw_data.size()));
-        fflush(stdout);
+        ServerLogError("DECODE FAILED: '%s' (%u raw bytes)",
+                       path.c_str(), static_cast<unsigned>(raw_data.size()));
         decode_failures_.fetch_add(1, std::memory_order_relaxed);
         TexProto::Response resp{};
         resp.status = TexProto::Status::DecodeFail;

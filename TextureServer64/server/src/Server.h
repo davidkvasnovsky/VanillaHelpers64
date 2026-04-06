@@ -8,16 +8,12 @@
 #include "SharedMemory.h"
 #include "TgaDecoder.h"
 #include "ThreadPool.h"
+#include "WinHandle.h"
 #include "../../shared/Protocol.h"
 
 #include <atomic>
 #include <string>
 #include <vector>
-
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <windows.h>
 
 namespace TexServer {
 
@@ -81,7 +77,7 @@ private:
     BlpDecoder                blp_decoder_;
     TgaDecoder                tga_decoder_;
     std::atomic<bool>         running_{false};
-    HANDLE                    shm_ready_event_{nullptr};
+    UniqueHandle<>            shm_ready_event_;
     std::atomic<uint32_t>     inflight_decodes_{0};
     std::atomic<uint64_t>     queued_bytes_{0};
 

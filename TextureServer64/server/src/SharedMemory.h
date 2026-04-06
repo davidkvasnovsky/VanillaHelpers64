@@ -3,14 +3,10 @@
 // texture server and the 32-bit WoW client.
 
 #include <cstdint>
-
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <windows.h>
+#include <array>
 
 #include "../../shared/Protocol.h"
-#include <array>
+#include "WinHandle.h"
 
 namespace TexServer {
 
@@ -55,10 +51,12 @@ public:
     void FreeSlot(int32_t slot);
 
 private:
-    HANDLE   m_hHeaderMapping = nullptr;
-    uint8_t* m_pHeaderBase    = nullptr;
-    std::array<HANDLE, TexProto::SHM_WINDOW_COUNT>  m_hDataMappings{};
-    std::array<uint8_t*, TexProto::SHM_WINDOW_COUNT> m_pDataBases{};
+    // Declaration order matters: views must appear AFTER their handles so that
+    // the destructor (reverse order) unmaps views before closing handles.
+    UniqueHandle<>  m_hHeaderMapping;
+    UniqueMapView   m_pHeaderBase;
+    std::array<UniqueHandle<>, TexProto::SHM_WINDOW_COUNT>  m_hDataMappings;
+    std::array<UniqueMapView, TexProto::SHM_WINDOW_COUNT>   m_pDataBases;
 };
 
 } // namespace TexServer

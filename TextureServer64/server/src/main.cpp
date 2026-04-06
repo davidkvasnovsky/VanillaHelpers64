@@ -2,6 +2,7 @@
 // Usage: TextureServer64.exe [--threads N] [--cache-mb N] [--visible]
 
 #include "Server.h"
+#include "ServerLog.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -37,7 +38,7 @@ static size_t DetectDefaultCacheBytes() {
 static BOOL WINAPI ConsoleCtrlHandler(DWORD ctrlType) {
     (void)ctrlType;
     if (g_server) {
-        printf("\n[TextureServer] Caught console signal, shutting down...\n");
+        TexServer::ServerLog("Caught console signal, shutting down...");
         g_server->Stop();
     }
     return TRUE;
@@ -98,16 +99,16 @@ int main(int argc, char* argv[]) {
     SetConsoleCtrlHandler(ConsoleCtrlHandler, TRUE);
 
     printf("=============================================================\n");
-    printf("[TextureServer] TextureServer64 starting...\n");
-    printf("[TextureServer]   PID:      %lu\n",
-           static_cast<unsigned long>(GetCurrentProcessId()));
-    printf("[TextureServer]   threads:  %u %s\n",
-           config.thread_count,
-           config.thread_count == 0 ? "(auto)" : "");
-    printf("[TextureServer]   cache:    %.0f MiB\n",
-            static_cast<double>(config.cache_max_bytes) / (1024.0 * 1024.0));
-    printf("[TextureServer]   cacheSrc: %s\n", cacheOverride ? "command line" : "auto (35% RAM)");
-    printf("[TextureServer]   visible:  %s\n", visible ? "yes" : "no");
+    TexServer::ServerLog("TextureServer64 starting...");
+    TexServer::ServerLog("  PID:      %lu",
+                         static_cast<unsigned long>(GetCurrentProcessId()));
+    TexServer::ServerLog("  threads:  %u %s",
+                         config.thread_count,
+                         config.thread_count == 0 ? "(auto)" : "");
+    TexServer::ServerLog("  cache:    %.0f MiB",
+                         static_cast<double>(config.cache_max_bytes) / (1024.0 * 1024.0));
+    TexServer::ServerLog("  cacheSrc: %s", cacheOverride ? "command line" : "auto (35% RAM)");
+    TexServer::ServerLog("  visible:  %s", visible ? "yes" : "no");
     printf("=============================================================\n");
     fflush(stdout);
 
@@ -115,31 +116,26 @@ int main(int argc, char* argv[]) {
     g_server = &server;
 
     if (!server.Start()) {
-        fprintf(stderr, "[TextureServer] ERROR: Failed to start. Exiting.\n");
-        fflush(stderr);
+        TexServer::ServerLogError("Failed to start. Exiting.");
         if (visible) {
-            printf("[TextureServer] Press Enter to exit...\n");
-            fflush(stdout);
+            TexServer::ServerLog("Press Enter to exit...");
             getchar();
         }
         return 1;
     }
 
-    printf("[TextureServer] Server started. Waiting for pipe connections on:\n");
-    printf("[TextureServer]   Pipe: %s\n", TexProto::PIPE_NAME);
-    printf("[TextureServer]   SHM:  %s\n", TexProto::SHM_NAME);
-    fflush(stdout);
+    TexServer::ServerLog("Server started. Waiting for pipe connections on:");
+    TexServer::ServerLog("  Pipe: %s", TexProto::PIPE_NAME);
+    TexServer::ServerLog("  SHM:  %s", TexProto::SHM_NAME);
 
     // Block in the accept loop until Stop() is called.
     server.Run();
 
     g_server = nullptr;
-    printf("[TextureServer] Exited.\n");
-    fflush(stdout);
+    TexServer::ServerLog("Exited.");
 
     if (visible) {
-        printf("[TextureServer] Press Enter to close...\n");
-        fflush(stdout);
+        TexServer::ServerLog("Press Enter to close...");
         getchar();
     }
     return 0;

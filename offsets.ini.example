@@ -1,0 +1,29 @@
+# VanillaHelpers Offset Overrides
+# Default values are compiled in for WoW 1.12.1.5875 (TurtleWoW).
+# Place this file as "offsets.ini" next to VanillaHelpers.dll.
+# Uncomment and change values only for different client builds.
+# Format: KEY = 0xHEXVALUE (or decimal)
+# Lines starting with # or ; are comments.
+#
+# ── Patch addresses ──────────────────────────────────────────────────────
+# PATCH_MINIMAP_RENDER_PARTY_LISTING = 0x4ED6BE
+# PATCH_TEXTURE_SIZE_1 = 0x4484C5
+# PATCH_TEXTURE_SIZE_2 = 0x4484D0
+# PATCH_ASYNC_TEXTURE_WAIT_ATOMIC = 0x44AD6F
+# ... (see Offsets.h OFFSET_LIST for all 149 entries)
+#
+# ── Function addresses ───────────────────────────────────────────────────
+# FUN_TEXTURE_CREATE = 0x449D90
+# FUN_TEXTURE_DESTROY = 0x448670
+# FUN_SFILE_OPEN = 0x6477A0
+# FUN_SFILE_READ = 0x648460
+# FUN_SFILE_CLOSE = 0x648730
+#
+# ── Lua functions ────────────────────────────────────────────────────────
+# LUA_PUSH_NIL = 0x6F37F0
+# LUA_PUSH_STRING = 0x6F3890
+#
+# ── Data addresses ───────────────────────────────────────────────────────
+# CONST_BLIP_VERTICES = 0xBC8230
+# VAR_ASYNC_BUFFER_USAGE_COUNTER = 0xB05D18
+# VFTABLE_CSTATUS = 0x7FFA10

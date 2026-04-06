@@ -1033,18 +1033,18 @@ using lua_next_t = int(__fastcall *)(void *L, int index);
 using lua_settop_t = void(__fastcall *)(void *L, int index);
 using lua_error_t = void(__cdecl *)(void *L, const char *);
 
-extern const lua_pushnil_t PushNil;
-extern const lua_isnumber_t IsNumber;
-extern const lua_tonumber_t ToNumber;
-extern const lua_pushnumber_t PushNumber;
-extern const lua_isstring_t IsString;
-extern const lua_tostring_t ToString;
-extern const lua_pushstring_t PushString;
-extern const lua_gettable_t GetTable;
-extern const lua_type_t Type;
-extern const lua_next_t Next;
-extern const lua_settop_t SetTop;
-extern const lua_error_t Error;
+extern lua_pushnil_t PushNil;
+extern lua_isnumber_t IsNumber;
+extern lua_tonumber_t ToNumber;
+extern lua_pushnumber_t PushNumber;
+extern lua_isstring_t IsString;
+extern lua_tostring_t ToString;
+extern lua_pushstring_t PushString;
+extern lua_gettable_t GetTable;
+extern lua_type_t Type;
+extern lua_next_t Next;
+extern lua_settop_t SetTop;
+extern lua_error_t Error;
 
 inline bool IsTable(void *L, int index) { return Type(L, index) == 5; }
 inline void Pop(void *L, int index) { SetTop(L, -(index)-1); }
@@ -1120,32 +1120,32 @@ using SMemAllocInternal_t = void *(__thiscall *)(void *thisptr, uint32_t sizeCla
 using SMemReallocInternal_t = void *(__thiscall *)(void *thisptr, void *blk, uint32_t sizeClass,
                                                    uint32_t size);
 
-extern const FrameScript_RegisterFunction_t FrameScript_RegisterFunction;
-extern const GetGUIDFromName_t GetGUIDFromName;
-extern const ClntObjMgrObjectPtr_t ClntObjMgrObjectPtr;
-extern const RenderObjectBlips_t RenderObjectBlips;
-extern const GxTexOwnerUpdate_t GxTexOwnerUpdate;
-extern const TextureGetGxTex_t TextureGetGxTex;
-extern const TextureDestroy_t TextureDestroy;
-extern const GxRsSet_t GxRsSet;
-extern const GxPrimLockVertexPtrs_t GxPrimLockVertexPtrs;
-extern const GxPrimDrawElements_t GxPrimDrawElements;
-extern const GxPrimUnlockVertexPtrs_t GxPrimUnlockVertexPtrs;
-extern const TextureCreate_t TextureCreate;
-extern const WorldPosToMinimapFrameCoords_t WorldPosToMinimapFrameCoords;
-extern const SStrPack_t SStrPack;
-extern const CWorld_QueryMapObjIDs_t CWorld_QueryMapObjIDs;
-extern const ClntObjMgrGetActivePlayer_t ClntObjMgrGetActivePlayer;
-extern const CGUnit_C_CanAssist_t CGUnit_C_CanAssist;
-extern const FrameScript_Execute_t FrameScript_Execute;
-extern const CVar_Register_t CVar_Register;
-extern const ClntObjMgrEnumVisibleObjects_t ClntObjMgrEnumVisibleObjects;
-extern const CGUnit_C_RefreshMount_t CGUnit_C_RefreshMount;
-extern const SFile_Open_t SFile_Open;
-extern const SFile_Read_t SFile_Read;
-extern const SFile_Close_t SFile_Close;
-extern const CGUnit_C_UpdateDisplayInfo_t CGUnit_C_UpdateDisplayInfo;
-extern const DBCache_ItemStats_C_GetRecord_t DBCache_ItemStats_C_GetRecord;
+extern FrameScript_RegisterFunction_t FrameScript_RegisterFunction;
+extern GetGUIDFromName_t GetGUIDFromName;
+extern ClntObjMgrObjectPtr_t ClntObjMgrObjectPtr;
+extern RenderObjectBlips_t RenderObjectBlips;
+extern GxTexOwnerUpdate_t GxTexOwnerUpdate;
+extern TextureGetGxTex_t TextureGetGxTex;
+extern TextureDestroy_t TextureDestroy;
+extern GxRsSet_t GxRsSet;
+extern GxPrimLockVertexPtrs_t GxPrimLockVertexPtrs;
+extern GxPrimDrawElements_t GxPrimDrawElements;
+extern GxPrimUnlockVertexPtrs_t GxPrimUnlockVertexPtrs;
+extern TextureCreate_t TextureCreate;
+extern WorldPosToMinimapFrameCoords_t WorldPosToMinimapFrameCoords;
+extern SStrPack_t SStrPack;
+extern CWorld_QueryMapObjIDs_t CWorld_QueryMapObjIDs;
+extern ClntObjMgrGetActivePlayer_t ClntObjMgrGetActivePlayer;
+extern CGUnit_C_CanAssist_t CGUnit_C_CanAssist;
+extern FrameScript_Execute_t FrameScript_Execute;
+extern CVar_Register_t CVar_Register;
+extern ClntObjMgrEnumVisibleObjects_t ClntObjMgrEnumVisibleObjects;
+extern CGUnit_C_RefreshMount_t CGUnit_C_RefreshMount;
+extern SFile_Open_t SFile_Open;
+extern SFile_Read_t SFile_Read;
+extern SFile_Close_t SFile_Close;
+extern CGUnit_C_UpdateDisplayInfo_t CGUnit_C_UpdateDisplayInfo;
+extern DBCache_ItemStats_C_GetRecord_t DBCache_ItemStats_C_GetRecord;
 
 void DrawMinimapTexture(HTEXTURE__ *texture, C2Vector minimapPosition, float scale, bool gray);
 
@@ -1160,11 +1160,15 @@ template <typename T> inline const T *DbLookupById(const WowClientDB<T> &db, int
 }
 
 extern C3Vector *s_blipVertices;
-extern TexCoord &texCoords;
-extern C3Vector &normal;
+extern TexCoord *texCoords;
+extern C3Vector *normal;
 extern unsigned short *vertIndices;
-extern const float &BLIP_HALF;
-extern const WowClientDB<FactionTemplate> &g_factionTemplateDB;
+extern const float *BLIP_HALF;
+extern const WowClientDB<FactionTemplate> *g_factionTemplateDB;
 extern void **g_itemDBCache;
+
+// Initialize all function pointers and data pointers from Offsets::.
+// Must be called after Offsets::LoadFromFile() and before any hook installation.
+void Init();
 
 } // namespace Game

@@ -20,6 +20,7 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
+#include <atomic>
 #include <intrin.h>
 #include <process.h>
 
@@ -159,6 +160,7 @@ typedef void(__fastcall *ReturnRetainedPayload_t)(void *thisptr, void *edxPayloa
 static FILE *s_logFile = nullptr;
 static SRWLOCK s_logLock = SRWLOCK_INIT;
 static bool s_fullLogEnabled = false;
+static DWORD s_logStartTick = 0;
 
 static bool StartsWithLogPrefix(const char *text, const char *prefix) {
     if (!text || !prefix)
@@ -199,6 +201,34 @@ static bool ShouldSuppressCompactLog(const char *fmt) {
     return false;
 }
 
+enum class LogLevel : uint8_t { Error = 0, Warn = 1, Info = 2, Debug = 3 };
+
+static const char *LogLevelTag(LogLevel level) {
+    switch (level) {
+    case LogLevel::Error: return "ERR ";
+    case LogLevel::Warn:  return "WARN";
+    case LogLevel::Info:  return "INFO";
+    case LogLevel::Debug: return "DBG ";
+    }
+    return "??? ";
+}
+
+static void LogMsgV(LogLevel level, const char *fmt, va_list args) {
+    if (!s_logFile) return;
+    if (level == LogLevel::Debug && !s_fullLogEnabled) return;
+    if (level == LogLevel::Info && ShouldSuppressCompactLog(fmt)) return;
+
+    DWORD elapsed = GetTickCount() - s_logStartTick;
+    DWORD tid = GetCurrentThreadId() % 10000;
+    AcquireSRWLockExclusive(&s_logLock);
+    fprintf(s_logFile, "[TexBridge] +%07lu T%04lu %s ",
+            elapsed, tid, LogLevelTag(level));
+    vfprintf(s_logFile, fmt, args);
+    fprintf(s_logFile, "\n");
+    if (level == LogLevel::Error) fflush(s_logFile);
+    ReleaseSRWLockExclusive(&s_logLock);
+}
+
 static void LogInit(const char *dllDir) {
     if (s_logFile) return;
 
@@ -207,25 +237,40 @@ static void LogInit(const char *dllDir) {
     s_fullLogEnabled = (GetFileAttributesA(fullLogPath.c_str()) != INVALID_FILE_ATTRIBUTES);
     fopen_s(&s_logFile, path.c_str(), "w");
     if (s_logFile) {
-        fprintf(s_logFile, "[TexBridge] Log started\n");
-        fprintf(s_logFile, "[TexBridge] Log mode: %s\n",
+        s_logStartTick = GetTickCount();
+        fprintf(s_logFile, "[TexBridge] +0000000 T%04lu INFO Log started (mode: %s)\n",
+                GetCurrentThreadId() % 10000,
                 s_fullLogEnabled ? "full" : "compact");
         fflush(s_logFile);
     }
 }
 
 static void LogWrite(const char *fmt, ...) {
-    if (!s_logFile) return;
-    if (ShouldSuppressCompactLog(fmt))
-        return;
-    AcquireSRWLockExclusive(&s_logLock);
     va_list args;
     va_start(args, fmt);
-    fprintf(s_logFile, "[TexBridge] ");
-    vfprintf(s_logFile, fmt, args);
-    fprintf(s_logFile, "\n");
+    LogMsgV(LogLevel::Info, fmt, args);
     va_end(args);
-    ReleaseSRWLockExclusive(&s_logLock);
+}
+
+static void LogError(const char *fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    LogMsgV(LogLevel::Error, fmt, args);
+    va_end(args);
+}
+
+static void LogWarn(const char *fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    LogMsgV(LogLevel::Warn, fmt, args);
+    va_end(args);
+}
+
+static void LogDebug(const char *fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    LogMsgV(LogLevel::Debug, fmt, args);
+    va_end(args);
 }
 
 static void LogClose() {
@@ -376,33 +421,33 @@ static std::deque<DecodeRequest> s_queue;
 static std::unordered_set<uint64_t> s_pendingDecodes;
 static constexpr int WORKER_COUNT = 4;
 static HANDLE  s_workerThreads[WORKER_COUNT] = {};
-static volatile bool s_workerRunning = false;
+static std::atomic<bool> s_workerRunning{false};
 
 // Back-pressure
-static volatile LONG s_inflight = 0;
-static volatile LONG s_queuedBytes = 0;
+static std::atomic<LONG> s_inflight{0};
+static std::atomic<LONG> s_queuedBytes{0};
 
 // Stats
-static volatile LONG s_stat_intercepted = 0;
-static volatile LONG s_stat_queued = 0;
-static volatile LONG s_stat_done = 0;
-static volatile LONG s_stat_cache_hits = 0;
-static volatile LONG s_stat_sync_fallback = 0;
-static volatile LONG s_stat_bp_rejects = 0;
-static volatile LONG s_stat_pool_misses = 0;
-static volatile LONG s_stat_default_swaps = 0;
-static volatile LONG s_stat_default_evictions = 0;
-static volatile LONG s_stat_default_reuploads = 0;
-static volatile LONG s_stat_decode_dedup_skips = 0;
-static volatile LONG64 s_stat_default_swapped_bytes = 0;
-static volatile LONG64 s_stat_default_evicted_bytes = 0;
-static volatile LONG s_stat_last_runtime_metrics_swaps = 0;
-static volatile LONG s_stat_default_touch_logs = 0;
+static std::atomic<LONG> s_stat_intercepted{0};
+static std::atomic<LONG> s_stat_queued{0};
+static std::atomic<LONG> s_stat_done{0};
+static std::atomic<LONG> s_stat_cache_hits{0};
+static std::atomic<LONG> s_stat_sync_fallback{0};
+static std::atomic<LONG> s_stat_bp_rejects{0};
+static std::atomic<LONG> s_stat_pool_misses{0};
+static std::atomic<LONG> s_stat_default_swaps{0};
+static std::atomic<LONG> s_stat_default_evictions{0};
+static std::atomic<LONG> s_stat_default_reuploads{0};
+static std::atomic<LONG> s_stat_decode_dedup_skips{0};
+static std::atomic<LONG64> s_stat_default_swapped_bytes{0};
+static std::atomic<LONG64> s_stat_default_evicted_bytes{0};
+static std::atomic<LONG> s_stat_last_runtime_metrics_swaps{0};
+static std::atomic<LONG> s_stat_default_touch_logs{0};
 
 // Per-frame upload throttle — caps D3D9 texture uploads per frame to avoid
 // stalling the render thread under DXVK (each upload triggers a Vulkan
 // command buffer submit through MoltenVK→Metal).
-static volatile LONG s_uploadsThisFrame = 0;
+static std::atomic<LONG> s_uploadsThisFrame{0};
 static constexpr LONG MAX_UPLOADS_PER_FRAME = 3;
 
 // Prefetch tracking
@@ -553,7 +598,7 @@ static SRWLOCK s_probedSetLock = SRWLOCK_INIT;
 static std::unordered_set<uintptr_t> s_probedSet;
 
 // Probing limits
-static volatile LONG s_probedCount = 0;
+static std::atomic<LONG> s_probedCount{0};
 static constexpr LONG MAX_PROBES = 50;          // hex-dump first N
 static constexpr LONG MAX_STRUCT_SCAN = 100;     // scan first N with pattern match
 
@@ -570,10 +615,10 @@ static constexpr int VOTE_SLOTS = 128;       // scan up to 512 bytes (128 dwords
 static volatile LONG s_whVotes[VOTE_SLOTS] = {};  // votes per dword offset
 
 // Phase 2 stats
-static volatile LONG s_stat_gxtex_calls   = 0;
-static volatile LONG s_stat_probed        = 0;
-static volatile LONG s_stat_freed_texbufs = 0;
-static volatile LONG64 s_stat_freed_bytes = 0;
+static std::atomic<LONG> s_stat_gxtex_calls{0};
+static std::atomic<LONG> s_stat_probed{0};
+static std::atomic<LONG> s_stat_freed_texbufs{0};
+static std::atomic<LONG64> s_stat_freed_bytes{0};
 
 // Original TextureGetGxTex function pointer
 static Game::TextureGetGxTex_t TextureGetGxTex_o = nullptr;
@@ -1206,7 +1251,7 @@ static bool TouchDefaultPoolEntry(uintptr_t textureKey, uint64_t pathHash) {
                      reinterpret_cast<void *>(textureKey),
                      static_cast<unsigned long long>(pathHash));
         }
-        LONG touchCount = InterlockedIncrement(&s_stat_default_touch_logs);
+        LONG touchCount = s_stat_default_touch_logs.fetch_add(1, std::memory_order_relaxed) + 1;
         if (touchCount <= 200 || (touchCount % 500) == 0) {
             LogWrite("DEFAULT_SWAP_TOUCH: texture=%p pathHash=0x%llX defaultTex=%p managedTex=%p size=%u",
                      reinterpret_cast<void *>(textureKey),
@@ -1223,7 +1268,7 @@ static bool TouchDefaultPoolEntry(uintptr_t textureKey, uint64_t pathHash) {
     return false;
 }
 
-static volatile bool s_hasPendingEvictions = false;
+static std::atomic<bool> s_hasPendingEvictions{false};
 
 static void MarkEvictionsForBudget() {
     AcquireSRWLockExclusive(&s_defaultPoolLock);
@@ -1252,7 +1297,7 @@ static void MarkEvictionsForBudget() {
         for (auto it : candidates) {
             if (projectedBytes <= DEFAULT_POOL_BUDGET_BYTES) break;
             it->pending_eviction = true;
-            s_hasPendingEvictions = true;
+            s_hasPendingEvictions.store(true, std::memory_order_relaxed);
             LogWrite("DEFAULT_SWAP_EVICT_MARK: texture=%p pathHash=0x%llX defaultTex=%p managedTex=%p size=%u class=%u protect=%u",
                      reinterpret_cast<void *>(it->texture_key),
                      static_cast<unsigned long long>(it->path_hash),
@@ -1275,7 +1320,7 @@ static void MarkEvictionsForBudget() {
         auto it = std::prev(s_defaultPoolLru.end());
         if (!it->pending_eviction) {
             it->pending_eviction = true;
-            s_hasPendingEvictions = true;
+            s_hasPendingEvictions.store(true, std::memory_order_relaxed);
         }
     }
 
@@ -1283,7 +1328,7 @@ static void MarkEvictionsForBudget() {
 }
 
 static void ApplyPendingEvictions() {
-    if (!s_hasPendingEvictions) return;
+    if (!s_hasPendingEvictions.load(std::memory_order_relaxed)) return;
 
     // Two-phase eviction: restore bindings and remove from tracking under the
     // lock (fast), then perform COM Release calls and logging outside the lock
@@ -1333,7 +1378,7 @@ static void ApplyPendingEvictions() {
         s_defaultPoolMap.erase(entry.texture_key);
         it = s_defaultPoolLru.erase(it);
     }
-    s_hasPendingEvictions = false;
+    s_hasPendingEvictions.store(false, std::memory_order_relaxed);
     ReleaseSRWLockExclusive(&s_defaultPoolLock);
 
     // Phase 2: COM Release, logging, and stats outside the lock.
@@ -1347,8 +1392,8 @@ static void ApplyPendingEvictions() {
                  static_cast<unsigned>(ev.residency_class),
                  path.empty() ? "<unknown>" : path.c_str());
         ReleaseD3DTexture(ev.default_tex);
-        InterlockedExchangeAdd64(&s_stat_default_evicted_bytes, ev.size_bytes);
-        InterlockedIncrement(&s_stat_default_evictions);
+        s_stat_default_evicted_bytes.fetch_add(ev.size_bytes, std::memory_order_relaxed);
+        s_stat_default_evictions.fetch_add(1, std::memory_order_relaxed);
     }
 }
 
@@ -1373,7 +1418,7 @@ static void TrackDefaultPoolTexture(uintptr_t textureKey, uint64_t pathHash,
         it->second->last_validated_tick = static_cast<LONG>(GetTickCount());
         s_defaultPoolBytes += sizeBytes;
         s_defaultPoolLru.splice(s_defaultPoolLru.begin(), s_defaultPoolLru, it->second);
-        InterlockedIncrement(&s_stat_default_reuploads);
+        s_stat_default_reuploads.fetch_add(1, std::memory_order_relaxed);
         LogWrite("DEFAULT_SWAP_TRACK: kind=reupload texture=%p pathHash=0x%llX defaultTex=%p managedTex=%p size=%u class=%u",
                  reinterpret_cast<void *>(textureKey),
                  static_cast<unsigned long long>(pathHash),
@@ -1404,11 +1449,11 @@ static void TrackDefaultPoolTexture(uintptr_t textureKey, uint64_t pathHash,
 }
 
 static void LogRuntimeMetricsIfNeeded() {
-    LONG swaps = InterlockedCompareExchange(&s_stat_default_swaps, 0, 0);
-    LONG lastLogged = InterlockedCompareExchange(&s_stat_last_runtime_metrics_swaps, 0, 0);
+    LONG swaps = s_stat_default_swaps.load(std::memory_order_relaxed);
+    LONG lastLogged = s_stat_last_runtime_metrics_swaps.load(std::memory_order_relaxed);
     if (swaps - lastLogged < RUNTIME_METRICS_SWAP_INTERVAL)
         return;
-    if (InterlockedCompareExchange(&s_stat_last_runtime_metrics_swaps, swaps, lastLogged) != lastLogged)
+    if (!s_stat_last_runtime_metrics_swaps.compare_exchange_strong(lastLogged, swaps, std::memory_order_relaxed))
         return;
 
     LogWrite("RUNTIME_METRICS: defaultPool current=%llu MB peak=%llu MB budget=%llu MB "
@@ -1416,9 +1461,12 @@ static void LogRuntimeMetricsIfNeeded() {
              static_cast<unsigned long long>(s_defaultPoolBytes / (1024ULL * 1024ULL)),
              static_cast<unsigned long long>(s_defaultPoolPeakBytes / (1024ULL * 1024ULL)),
              static_cast<unsigned long long>(DEFAULT_POOL_BUDGET_BYTES / (1024ULL * 1024ULL)),
-             swaps, s_stat_default_evictions, s_stat_default_reuploads, s_stat_decode_dedup_skips,
-             static_cast<unsigned long long>(s_stat_default_swapped_bytes / (1024ULL * 1024ULL)),
-             static_cast<unsigned long long>(s_stat_default_evicted_bytes / (1024ULL * 1024ULL)));
+             swaps,
+             s_stat_default_evictions.load(std::memory_order_relaxed),
+             s_stat_default_reuploads.load(std::memory_order_relaxed),
+             s_stat_decode_dedup_skips.load(std::memory_order_relaxed),
+             static_cast<unsigned long long>(s_stat_default_swapped_bytes.load(std::memory_order_relaxed) / (1024ULL * 1024ULL)),
+             static_cast<unsigned long long>(s_stat_default_evicted_bytes.load(std::memory_order_relaxed) / (1024ULL * 1024ULL)));
 }
 
 static void CloseSharedMemory();
@@ -1779,15 +1827,15 @@ static bool IsSwapWorldDeferred() {
 
 static DWORD WINAPI DecodeWorkerProc(LPVOID /*param*/) {
     LogWrite("Worker thread %lu started", GetCurrentThreadId());
-    while (s_workerRunning) {
+    while (s_workerRunning.load(std::memory_order_acquire)) {
         DecodeRequest req;
 
         {
             AcquireSRWLockExclusive(&s_queueLock);
-            while (s_queue.empty() && s_workerRunning) {
+            while (s_queue.empty() && s_workerRunning.load(std::memory_order_acquire)) {
                 SleepConditionVariableSRW(&s_queueCV, &s_queueLock, INFINITE, 0);
             }
-            if (!s_workerRunning && s_queue.empty()) {
+            if (!s_workerRunning.load(std::memory_order_acquire) && s_queue.empty()) {
                 ReleaseSRWLockExclusive(&s_queueLock);
                 break;
             }
@@ -1801,7 +1849,7 @@ static DWORD WINAPI DecodeWorkerProc(LPVOID /*param*/) {
             ReleaseSRWLockExclusive(&s_queueLock);
         }
 
-        InterlockedIncrement(&s_inflight);
+        s_inflight.fetch_add(1, std::memory_order_acq_rel);
         LogWrite("Worker: processing '%s' (%u bytes, buf=%d)",
                  req.path, req.raw_size, req.buf_idx);
 
@@ -1811,9 +1859,8 @@ static DWORD WINAPI DecodeWorkerProc(LPVOID /*param*/) {
                                     req.priority, &resp);
 
         s_pool.Release(req.buf_idx);
-        InterlockedExchangeAdd(&s_queuedBytes,
-                               -static_cast<LONG>(req.raw_size));
-        InterlockedDecrement(&s_inflight);
+        s_queuedBytes.fetch_add(-static_cast<LONG>(req.raw_size), std::memory_order_acq_rel);
+        s_inflight.fetch_sub(1, std::memory_order_acq_rel);
 
         if (slot >= 0) {
             // Record that this texture decoded successfully on the server.
@@ -1859,7 +1906,7 @@ static DWORD WINAPI DecodeWorkerProc(LPVOID /*param*/) {
             // when GetDecodedTexture is called.
             ReleaseSlot(slot);
 
-            InterlockedIncrement(&s_stat_done);
+            s_stat_done.fetch_add(1, std::memory_order_relaxed);
             LogWrite("Worker: decoded OK %ux%u for '%s' (slot released)",
                      resp.width, resp.height, req.path);
         } else {
@@ -1877,7 +1924,7 @@ static unsigned __stdcall DecodeWorkerEntry(void *) {
 
 static void StartWorker() {
     if (s_workerThreads[0]) return;
-    s_workerRunning = true;
+    s_workerRunning.store(true, std::memory_order_release);
     for (int i = 0; i < WORKER_COUNT; ++i) {
         s_workerThreads[i] = reinterpret_cast<HANDLE>(
             _beginthreadex(nullptr, 0, DecodeWorkerEntry, nullptr, 0, nullptr));
@@ -1887,7 +1934,7 @@ static void StartWorker() {
 
 static void StopWorker() {
     if (!s_workerThreads[0]) return;
-    s_workerRunning = false;
+    s_workerRunning.store(false, std::memory_order_release);
     WakeAllConditionVariable(&s_queueCV);
     // Cancel any pending synchronous pipe I/O so workers blocked in
     // ReadFile/WriteFile can observe s_workerRunning==false and exit.
@@ -1917,14 +1964,14 @@ static void StopWorker() {
 
 static bool QueueDecode(const char *path, int bufIdx, uint32_t rawSize,
                         uint8_t priority) {
-    LONG inflight = InterlockedCompareExchange(&s_inflight, 0, 0);
-    LONG queued   = InterlockedCompareExchange(&s_queuedBytes, 0, 0);
+    LONG inflight = s_inflight.load(std::memory_order_acquire);
+    LONG queued   = s_queuedBytes.load(std::memory_order_acquire);
     if (static_cast<uint32_t>(inflight) >= TBProto::MAX_INFLIGHT ||
         queued < 0 ||
         static_cast<uint32_t>(queued) + rawSize >
             TBProto::MAX_QUEUE_MB * 1024u * 1024u)
     {
-        InterlockedIncrement(&s_stat_bp_rejects);
+        s_stat_bp_rejects.fetch_add(1, std::memory_order_relaxed);
         LogWrite("QueueDecode: back-pressure reject for '%s'", path);
         return false;
     }
@@ -1943,11 +1990,11 @@ static bool QueueDecode(const char *path, int bufIdx, uint32_t rawSize,
     AcquireSRWLockExclusive(&s_queueLock);
     if (s_pendingDecodes.find(req.path_hash) != s_pendingDecodes.end()) {
         ReleaseSRWLockExclusive(&s_queueLock);
-        InterlockedIncrement(&s_stat_decode_dedup_skips);
+        s_stat_decode_dedup_skips.fetch_add(1, std::memory_order_relaxed);
         return false;
     }
     s_pendingDecodes.insert(req.path_hash);
-    InterlockedExchangeAdd(&s_queuedBytes, static_cast<LONG>(rawSize));
+    s_queuedBytes.fetch_add(static_cast<LONG>(rawSize), std::memory_order_acq_rel);
     auto insertIt = s_queue.end();
     for (auto it = s_queue.begin(); it != s_queue.end(); ++it) {
         if (req.priority < it->priority) {
@@ -1959,7 +2006,7 @@ static bool QueueDecode(const char *path, int bufIdx, uint32_t rawSize,
     ReleaseSRWLockExclusive(&s_queueLock);
 
     WakeConditionVariable(&s_queueCV);
-    InterlockedIncrement(&s_stat_queued);
+    s_stat_queued.fetch_add(1, std::memory_order_relaxed);
     return true;
 }
 
@@ -2205,7 +2252,7 @@ static bool TrySwapToDefaultPool(Game::HTEXTURE__ *texture, Game::CGxTex *gxTex,
                                  uint64_t pathHash, const char *path) {
     if (!texture || !gxTex || !path)
         return false;
-    if (InterlockedCompareExchange(&s_uploadsThisFrame, 0, 0) >= MAX_UPLOADS_PER_FRAME)
+    if (s_uploadsThisFrame.load(std::memory_order_relaxed) >= MAX_UPLOADS_PER_FRAME)
         return false;
     const uintptr_t textureKey = reinterpret_cast<uintptr_t>(texture);
     if (IsTextureQuarantined(textureKey, pathHash))
@@ -2418,9 +2465,9 @@ static bool TrySwapToDefaultPool(Game::HTEXTURE__ *texture, Game::CGxTex *gxTex,
              static_cast<unsigned>(levels));
     TrackDefaultPoolTexture(textureKey, pathHash, defaultTex, managedTex,
                             trackedBytes, residencyClass);
-    InterlockedIncrement(&s_stat_default_swaps);
-    InterlockedIncrement(&s_uploadsThisFrame);
-    InterlockedExchangeAdd64(&s_stat_default_swapped_bytes, trackedBytes);
+    s_stat_default_swaps.fetch_add(1, std::memory_order_relaxed);
+    s_uploadsThisFrame.fetch_add(1, std::memory_order_relaxed);
+    s_stat_default_swapped_bytes.fetch_add(trackedBytes, std::memory_order_relaxed);
     LogRuntimeMetricsIfNeeded();
     LogWrite("DEFAULT_SWAP: '%s' %ux%u fmt=%u mips=%u",
              path, info.width, info.height, info.format, levels);
@@ -2443,8 +2490,8 @@ static const char *D3DFormatName(uint32_t fmt) {
 }
 
 // Accumulate total D3D managed memory for reporting.
-static volatile LONG64 s_total_d3d_managed_bytes = 0;
-static volatile LONG   s_total_d3d_managed_count = 0;
+static std::atomic<LONG64> s_total_d3d_managed_bytes{0};
+static std::atomic<LONG>   s_total_d3d_managed_count{0};
 
 static void ProbeTextureStruct(Game::HTEXTURE__ *tex, uint64_t pathHash,
                                 Game::CGxTex *gxTex) {
@@ -2467,7 +2514,7 @@ static void ProbeTextureStruct(Game::HTEXTURE__ *tex, uint64_t pathHash,
         }
         const uint32_t *words = reinterpret_cast<const uint32_t *>(tex);
 
-        LONG probeIdx = InterlockedIncrement(&s_probedCount);
+        LONG probeIdx = s_probedCount.fetch_add(1, std::memory_order_relaxed) + 1;
 
         // ── Verify confirmed HTEXTURE offsets ──
         uint32_t htex_width  = words[OFF_HTEX_WIDTH / 4];
@@ -2493,7 +2540,7 @@ static void ProbeTextureStruct(Game::HTEXTURE__ *tex, uint64_t pathHash,
 
         // Skip further probing if texture not fully loaded yet.
         if (!loaded) {
-            InterlockedIncrement(&s_stat_probed);
+            s_stat_probed.fetch_add(1, std::memory_order_relaxed);
             return;
         }
 
@@ -2514,7 +2561,7 @@ static void ProbeTextureStruct(Game::HTEXTURE__ *tex, uint64_t pathHash,
                 if (resourceType != D3DRTYPE_TEXTURE) {
                     LogWrite("  D3D9: candidate=%p GetType=%u (expected %u texture)",
                              pD3DTex, resourceType, D3DRTYPE_TEXTURE);
-                    InterlockedIncrement(&s_stat_probed);
+                    s_stat_probed.fetch_add(1, std::memory_order_relaxed);
                     return;
                 }
 
@@ -2554,9 +2601,8 @@ static void ProbeTextureStruct(Game::HTEXTURE__ *tex, uint64_t pathHash,
                     // For MANAGED pool, D3D holds both VRAM + system memory copies.
                     // System memory copy = totalBytes, which is the OOM source.
                     if (desc.Pool == D3DPOOL_MANAGED) {
-                        InterlockedExchangeAdd64(&s_total_d3d_managed_bytes,
-                                                 static_cast<LONG64>(totalBytes));
-                        InterlockedIncrement(&s_total_d3d_managed_count);
+                        s_total_d3d_managed_bytes.fetch_add(static_cast<LONG64>(totalBytes), std::memory_order_relaxed);
+                        s_total_d3d_managed_count.fetch_add(1, std::memory_order_relaxed);
                     }
 
                     LogWrite("  D3D9: IDirect3DTexture9=%p type=%u pool=%s fmt=%s(%u) "
@@ -2567,15 +2613,15 @@ static void ProbeTextureStruct(Game::HTEXTURE__ *tex, uint64_t pathHash,
                              D3DFormatName(desc.Format), desc.Format,
                              desc.Width, desc.Height, levels,
                              static_cast<unsigned long long>(totalBytes),
-                             static_cast<long long>(s_total_d3d_managed_bytes),
-                             static_cast<long>(s_total_d3d_managed_count));
+                             static_cast<long long>(s_total_d3d_managed_bytes.load(std::memory_order_relaxed)),
+                             static_cast<long>(s_total_d3d_managed_count.load(std::memory_order_relaxed)));
                 } else {
                     LogWrite("  D3D9: GetLevelDesc FAILED hr=0x%08lX", static_cast<unsigned long>(hr));
                 }
             }
         }
 
-        InterlockedIncrement(&s_stat_probed);
+        s_stat_probed.fetch_add(1, std::memory_order_relaxed);
     }
 }
 
@@ -2584,7 +2630,7 @@ static Game::CGxTex * __fastcall TextureGetGxTex_h(
     int edx,                    // unused (fastcall padding for thiscall)
     Game::CStatus *status)
 {
-    InterlockedIncrement(&s_stat_gxtex_calls);
+    s_stat_gxtex_calls.fetch_add(1, std::memory_order_relaxed);
 
     // Per-frame work — runs once per GetTickCount tick (~15ms) since
     // OnFrameTick has no external caller.  One GetTickCount per call,
@@ -2707,7 +2753,7 @@ static Game::CGxTex * __fastcall TextureGetGxTex_h(
     }
 
     // Probe if still within limit and texture is in our decode cache.
-    if (s_probedCount < MAX_STRUCT_SCAN && inCache) {
+    if (s_probedCount.load(std::memory_order_relaxed) < MAX_STRUCT_SCAN && inCache) {
         ProbeTextureStruct(texture, pathHash, gxTex);
     }
 
@@ -2745,10 +2791,10 @@ static Game::HTEXTURE__ * __fastcall TextureCreate_h(
     // Quick checks before any work.
     if (shouldTrackCpu) {
 
-        InterlockedIncrement(&s_stat_intercepted);
+        s_stat_intercepted.fetch_add(1, std::memory_order_relaxed);
 
         // Log first 50 intercepts, then every 100th.
-        LONG count = s_stat_intercepted;
+        LONG count = s_stat_intercepted.load(std::memory_order_relaxed);
         if (count <= 50 || (count % 100) == 0)
             LogWrite("TextureCreate_h: #%ld '%s'", count, filename);
 
@@ -2763,7 +2809,7 @@ static Game::HTEXTURE__ * __fastcall TextureCreate_h(
         }
 
         if (alreadyCached) {
-            InterlockedIncrement(&s_stat_cache_hits);
+            s_stat_cache_hits.fetch_add(1, std::memory_order_relaxed);
         } else {
             // Defer the synchronous MPQ read to OnFrameTick so zone transitions
             // don't block the main thread with our redundant file I/O.
@@ -3169,30 +3215,37 @@ void Shutdown(bool terminateServer) {
 
     // Report Phase 2 struct discovery results.
     LogWrite("Shutdown: Phase2 probed=%ld gxtexCalls=%ld freed=%ld",
-             s_stat_probed, s_stat_gxtex_calls,
-             s_stat_freed_texbufs);
+             s_stat_probed.load(std::memory_order_relaxed),
+             s_stat_gxtex_calls.load(std::memory_order_relaxed),
+             s_stat_freed_texbufs.load(std::memory_order_relaxed));
     LogWrite("Shutdown: D3D managed textures=%ld total_system_mem=%lld MB",
-             static_cast<long>(s_total_d3d_managed_count),
-             static_cast<long long>(s_total_d3d_managed_bytes / (1024 * 1024)));
+             static_cast<long>(s_total_d3d_managed_count.load(std::memory_order_relaxed)),
+             static_cast<long long>(s_total_d3d_managed_bytes.load(std::memory_order_relaxed) / (1024 * 1024)));
     LogWrite("Shutdown: defaultPool current=%llu MB peak=%llu MB budget=%llu MB "
              "swapped=%llu MB evicted=%llu MB swaps=%ld evictions=%ld reuploads=%ld",
              static_cast<unsigned long long>(s_defaultPoolBytes / (1024ULL * 1024ULL)),
              static_cast<unsigned long long>(s_defaultPoolPeakBytes / (1024ULL * 1024ULL)),
              static_cast<unsigned long long>(DEFAULT_POOL_BUDGET_BYTES / (1024ULL * 1024ULL)),
-             static_cast<unsigned long long>(s_stat_default_swapped_bytes / (1024ULL * 1024ULL)),
-             static_cast<unsigned long long>(s_stat_default_evicted_bytes / (1024ULL * 1024ULL)),
-             s_stat_default_swaps, s_stat_default_evictions, s_stat_default_reuploads);
+             static_cast<unsigned long long>(s_stat_default_swapped_bytes.load(std::memory_order_relaxed) / (1024ULL * 1024ULL)),
+             static_cast<unsigned long long>(s_stat_default_evicted_bytes.load(std::memory_order_relaxed) / (1024ULL * 1024ULL)),
+             s_stat_default_swaps.load(std::memory_order_relaxed),
+             s_stat_default_evictions.load(std::memory_order_relaxed),
+             s_stat_default_reuploads.load(std::memory_order_relaxed));
 
     LogWrite("Shutdown: complete. Stats: intercepted=%ld queued=%ld done=%ld "
              "cacheHits=%ld syncFallback=%ld bpRejects=%ld poolMisses=%ld",
-             s_stat_intercepted, s_stat_queued, s_stat_done,
-             s_stat_cache_hits, s_stat_sync_fallback,
-             s_stat_bp_rejects, s_stat_pool_misses);
+             s_stat_intercepted.load(std::memory_order_relaxed),
+             s_stat_queued.load(std::memory_order_relaxed),
+             s_stat_done.load(std::memory_order_relaxed),
+             s_stat_cache_hits.load(std::memory_order_relaxed),
+             s_stat_sync_fallback.load(std::memory_order_relaxed),
+             s_stat_bp_rejects.load(std::memory_order_relaxed),
+             s_stat_pool_misses.load(std::memory_order_relaxed));
     LogClose();
 }
 
 void OnFrameTick() {
-    InterlockedExchange(&s_uploadsThisFrame, 0);
+    s_uploadsThisFrame.store(0, std::memory_order_relaxed);
     ApplyPendingEvictions();
     MarkEvictionsForBudget();
 
@@ -3230,14 +3283,15 @@ void OnFrameTick() {
 
             int bufIdx = s_pool.Acquire();
             if (bufIdx < 0) { s_deferredReads.push_front(dr); break; }
-            s_deferredReadHashes.erase(dr.path_hash);
 
             uint8_t *buf = s_pool.Get(bufIdx);
             uint32_t rawSize = ReadFileViaStorm(dr.path, buf, POOL_BUF_SIZE);
             if (rawSize == 0) {
+                s_deferredReadHashes.erase(dr.path_hash);
                 s_pool.Release(bufIdx);
                 continue;
             }
+            s_deferredReadHashes.erase(dr.path_hash);
 
             uint64_t dh = DirHash(dr.path);
             if (dh != 0) {
@@ -3294,7 +3348,7 @@ bool GetDecodedTexture(const char *path, const void *rawData, uint32_t rawSize,
     }
 
     if (serverHasIt) {
-        InterlockedIncrement(&s_stat_cache_hits);
+        s_stat_cache_hits.fetch_add(1, std::memory_order_relaxed);
 
         // Ask the server for a fresh slot from its cache. Raw bytes are only
         // needed if the cache missed and we must fall back to a decode.
@@ -3319,7 +3373,7 @@ bool GetDecodedTexture(const char *path, const void *rawData, uint32_t rawSize,
             // will succeed on a future frame once the worker completes.
             EnqueueDeferredRead(path, pathHash);
             LogWrite("GetDecodedTexture: stale hint for '%s', queued async re-decode", path);
-            InterlockedIncrement(&s_stat_sync_fallback);
+            s_stat_sync_fallback.fetch_add(1, std::memory_order_relaxed);
             return false;
         }
         // Fall through to sync fallback only when caller provided raw data.
@@ -3330,11 +3384,11 @@ bool GetDecodedTexture(const char *path, const void *rawData, uint32_t rawSize,
     //    passes nullptr).  For the common case the async re-queue above
     //    avoids this entirely.
     if (!rawBytes || rawSize == 0) {
-        InterlockedIncrement(&s_stat_sync_fallback);
+        s_stat_sync_fallback.fetch_add(1, std::memory_order_relaxed);
         return false;
     }
 
-    InterlockedIncrement(&s_stat_sync_fallback);
+    s_stat_sync_fallback.fetch_add(1, std::memory_order_relaxed);
 
     TBProto::Response resp{};
     int32_t slot = SendToServer(path,
@@ -3374,21 +3428,21 @@ void ReleaseSlot(int32_t slot) {
 }
 
 void GetStats(PipelineStats &out) {
-    out.textures_intercepted  = static_cast<uint32_t>(s_stat_intercepted);
-    out.async_decodes_queued  = static_cast<uint32_t>(s_stat_queued);
-    out.async_decodes_done    = static_cast<uint32_t>(s_stat_done);
-    out.cache_hits            = static_cast<uint32_t>(s_stat_cache_hits);
-    out.sync_fallbacks        = static_cast<uint32_t>(s_stat_sync_fallback);
-    out.back_pressure_rejects = static_cast<uint32_t>(s_stat_bp_rejects);
-    out.buffer_pool_misses    = static_cast<uint32_t>(s_stat_pool_misses);
+    out.textures_intercepted  = static_cast<uint32_t>(s_stat_intercepted.load(std::memory_order_relaxed));
+    out.async_decodes_queued  = static_cast<uint32_t>(s_stat_queued.load(std::memory_order_relaxed));
+    out.async_decodes_done    = static_cast<uint32_t>(s_stat_done.load(std::memory_order_relaxed));
+    out.cache_hits            = static_cast<uint32_t>(s_stat_cache_hits.load(std::memory_order_relaxed));
+    out.sync_fallbacks        = static_cast<uint32_t>(s_stat_sync_fallback.load(std::memory_order_relaxed));
+    out.back_pressure_rejects = static_cast<uint32_t>(s_stat_bp_rejects.load(std::memory_order_relaxed));
+    out.buffer_pool_misses    = static_cast<uint32_t>(s_stat_pool_misses.load(std::memory_order_relaxed));
 
     // Phase 2
-    out.gxtex_calls           = static_cast<uint32_t>(s_stat_gxtex_calls);
-    out.struct_probes         = static_cast<uint32_t>(s_stat_probed);
+    out.gxtex_calls           = static_cast<uint32_t>(s_stat_gxtex_calls.load(std::memory_order_relaxed));
+    out.struct_probes         = static_cast<uint32_t>(s_stat_probed.load(std::memory_order_relaxed));
     out.discovered_width_off  = static_cast<int32_t>(s_off_width);
     out.discovered_height_off = static_cast<int32_t>(s_off_height);
     out.discovered_pixbuf_off = static_cast<int32_t>(s_off_pixelbuf);
-    out.freed_texbufs         = static_cast<uint32_t>(s_stat_freed_texbufs);
+    out.freed_texbufs         = static_cast<uint32_t>(s_stat_freed_texbufs.load(std::memory_order_relaxed));
 }
 
 } // namespace TexBridge

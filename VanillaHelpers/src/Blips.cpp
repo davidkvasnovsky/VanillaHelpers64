@@ -187,7 +187,7 @@ static void UpdateCustomHover(Game::C2Vector mouse, Game::C2Vector offset) {
     now.reserve(g_trackedObjectsData.size());
 
     for (const auto &objData : g_trackedObjectsData) {
-        const float half = Game::BLIP_HALF * objData.blip.scale;
+        const float half = *Game::BLIP_HALF * objData.blip.scale;
         const float px = objData.minimapPos.x + offset.x;
         const float py = objData.minimapPos.y + offset.y;
 

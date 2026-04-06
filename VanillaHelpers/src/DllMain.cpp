@@ -73,6 +73,17 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID lpReserved) {
         DisableThreadLibraryCalls(hModule);
         s_hModule = hModule;
 
+        // Load offset overrides (if offsets.ini exists) and bind function pointers.
+        // Must happen before MH_Initialize / Allocator / Texture which use Offsets::.
+        {
+            char dllDir[MAX_PATH] = {};
+            GetModuleFileNameA(hModule, dllDir, MAX_PATH);
+            char *lastSlash = strrchr(dllDir, '\\');
+            if (lastSlash) *(lastSlash + 1) = '\0';
+            Offsets::LoadFromFile(dllDir);
+        }
+        Game::Init();
+
         if (MH_Initialize() != MH_OK)
             return FALSE;
 
