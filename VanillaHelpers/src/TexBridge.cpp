@@ -112,8 +112,8 @@ namespace TexBridge {
 // ══════════════════════════════════════════════════════════════════════
 //  File Logger
 // ══════════════════════════════════════════════════════════════════════
-// Writes to TexBridge.log next to the DLL. Flushed after every write
-// for crash-safe diagnostics.
+// Writes to TexBridge.log next to the DLL. Flushed periodically
+// (every ~60 ticks in OnFrameTick) for performance under Wine.
 
 namespace {
 
@@ -314,6 +314,16 @@ struct DecodeRequest {
     uint64_t path_hash;
 };
 
+// Deferred file reads — TextureCreate_h records filenames here instead of
+// doing synchronous MPQ I/O immediately.  OnFrameTick drains a few per frame.
+// Both run on the main thread so no lock is needed.
+struct DeferredRead {
+    char     path[260];
+    uint64_t path_hash;
+};
+static std::deque<DeferredRead> s_deferredReads;
+static constexpr int MAX_DEFERRED_READS_PER_FRAME = 5;
+
 } // anonymous namespace
 
 // ══════════════════════════════════════════════════════════════════════
@@ -370,6 +380,12 @@ static volatile LONG64 s_stat_default_swapped_bytes = 0;
 static volatile LONG64 s_stat_default_evicted_bytes = 0;
 static volatile LONG s_stat_last_runtime_metrics_swaps = 0;
 static volatile LONG s_stat_default_touch_logs = 0;
+
+// Per-frame upload throttle — caps D3D9 texture uploads per frame to avoid
+// stalling the render thread under DXVK (each upload triggers a Vulkan
+// command buffer submit through MoltenVK→Metal).
+static volatile LONG s_uploadsThisFrame = 0;
+static constexpr LONG MAX_UPLOADS_PER_FRAME = 3;
 
 // Prefetch tracking
 static constexpr int PREFETCH_HISTORY = 32;
@@ -1485,7 +1501,6 @@ static bool ReconnectServer() {
 
 // ── Persistent pipe connection (P8) ─────────────────────────────────
 
-static HANDLE s_mainPipe = INVALID_HANDLE_VALUE;
 static thread_local HANDLE s_threadPipe = INVALID_HANDLE_VALUE;
 
 static HANDLE& GetThreadPipe() {
@@ -1520,7 +1535,7 @@ static void InvalidatePersistentPipe() {
 }
 
 static void ClosePersistentPipes() {
-    CloseIfValid(s_mainPipe);
+    CloseIfValid(GetThreadPipe());  // main thread's thread-local pipe
     // Worker thread-local pipes are closed when each worker exits
 }
 
@@ -1704,7 +1719,7 @@ static DWORD WINAPI DecodeWorkerProc(LPVOID /*param*/) {
         {
             AcquireSRWLockExclusive(&s_queueLock);
             while (s_queue.empty() && s_workerRunning) {
-                SleepConditionVariableSRW(&s_queueCV, &s_queueLock, 50, 0);
+                SleepConditionVariableSRW(&s_queueCV, &s_queueLock, INFINITE, 0);
             }
             if (!s_workerRunning && s_queue.empty()) {
                 ReleaseSRWLockExclusive(&s_queueLock);
@@ -2081,6 +2096,8 @@ static bool TrySwapToDefaultPool(Game::HTEXTURE__ *texture, Game::CGxTex *gxTex,
                                  uint64_t pathHash, const char *path) {
     if (!texture || !gxTex || !path)
         return false;
+    if (InterlockedCompareExchange(&s_uploadsThisFrame, 0, 0) >= MAX_UPLOADS_PER_FRAME)
+        return false;
     const uintptr_t textureKey = reinterpret_cast<uintptr_t>(texture);
     if (IsTextureQuarantined(textureKey, pathHash))
         return false;
@@ -2293,6 +2310,7 @@ static bool TrySwapToDefaultPool(Game::HTEXTURE__ *texture, Game::CGxTex *gxTex,
     TrackDefaultPoolTexture(textureKey, pathHash, defaultTex, managedTex,
                             trackedBytes, residencyClass);
     InterlockedIncrement(&s_stat_default_swaps);
+    InterlockedIncrement(&s_uploadsThisFrame);
     InterlockedExchangeAdd64(&s_stat_default_swapped_bytes, trackedBytes);
     LogRuntimeMetricsIfNeeded();
     LogWrite("DEFAULT_SWAP: '%s' %ux%u fmt=%u mips=%u",
@@ -2459,14 +2477,36 @@ static Game::CGxTex * __fastcall TextureGetGxTex_h(
 {
     InterlockedIncrement(&s_stat_gxtex_calls);
 
+    // Per-frame work — runs once per GetTickCount tick (~15ms) since
+    // OnFrameTick has no external caller.  Cheap guard: one GetTickCount +
+    // comparison per TextureGetGxTex call.
+    {
+        static DWORD s_lastTick = 0;
+        DWORD tick = GetTickCount();
+        if (tick != s_lastTick) {
+            s_lastTick = tick;
+            OnFrameTick();
+        }
+    }
+
     uintptr_t textureKey = texture ? reinterpret_cast<uintptr_t>(texture) : 0;
 
-    // Fast path: check if texture is tracked before doing any heavy work
+    // Single lock scope: read pathHash, trackedPath, and quarantine status together
+    // to avoid multiple futex round-trips under Wine.
     uint64_t pathHash = 0;
+    std::string trackedPath;
+    bool quarantined = false;
     if (textureKey) {
         AcquireSRWLockShared(&s_texMapLock);
         auto hashIt = s_texMap.find(textureKey);
-        if (hashIt != s_texMap.end()) pathHash = hashIt->second;
+        if (hashIt != s_texMap.end()) {
+            pathHash = hashIt->second;
+            auto pathIt = s_texPathMap.find(textureKey);
+            if (pathIt != s_texPathMap.end())
+                trackedPath = pathIt->second;
+            quarantined = s_swapQuarantineTex.count(textureKey) > 0 ||
+                          s_swapQuarantinePaths.count(pathHash) > 0;
+        }
         ReleaseSRWLockShared(&s_texMapLock);
     }
 
@@ -2478,16 +2518,6 @@ static Game::CGxTex * __fastcall TextureGetGxTex_h(
     // Hook D3D9 Device::Reset on first tracked-texture call (device exists by now)
     if (!s_deviceResetHooked && s_cachedD3DDevice)
         HookDeviceReset(s_cachedD3DDevice);
-
-    // Tracked texture: read the full path for Phase 2 processing
-    std::string trackedPath;
-    {
-        AcquireSRWLockShared(&s_texMapLock);
-        auto pathIt = s_texPathMap.find(textureKey);
-        if (pathIt != s_texPathMap.end())
-            trackedPath = pathIt->second;
-        ReleaseSRWLockShared(&s_texMapLock);
-    }
 
     // Call original — this triggers decode + D3D upload if not already done.
     s_activeTextureAllocKey = textureKey;
@@ -2502,10 +2532,7 @@ static Game::CGxTex * __fastcall TextureGetGxTex_h(
     if (!s_initialized || !s_server_available || !texture || !gxTex)
         return gxTex;
 
-    if (pathHash == 0)
-        return gxTex;
-
-    if (IsTextureQuarantined(textureKey, pathHash))
+    if (quarantined)
         return gxTex;
 
     if (IsSwapStartupDeferred() || IsSwapWorldDeferred())
@@ -2621,33 +2648,12 @@ static Game::HTEXTURE__ * __fastcall TextureCreate_h(
         if (alreadyCached) {
             InterlockedIncrement(&s_stat_cache_hits);
         } else {
-            // Acquire pool buffer.
-            int bufIdx = s_pool.Acquire();
-            if (bufIdx < 0) {
-                InterlockedIncrement(&s_stat_pool_misses);
-                if (count <= 50)
-                    LogWrite("TextureCreate_h: no pool buffer for '%s'", filename);
-            } else {
-                // Read raw bytes via SFile (direct, not hooked).
-                uint8_t *buf = s_pool.Get(bufIdx);
-                uint32_t rawSize = ReadFileViaStorm(filename, buf, POOL_BUF_SIZE);
-
-                if (rawSize == 0) {
-                    s_pool.Release(bufIdx);
-                } else {
-                    // Track directory for prefetch.
-                    uint64_t dh = DirHash(filename);
-                    if (dh != 0) {
-                        s_recentDirs[s_recentDirIdx % PREFETCH_HISTORY] = dh;
-                        s_recentDirIdx++;
-                    }
-
-                    // Queue async decode. On back-pressure, release buffer.
-                    if (!QueueDecode(filename, bufIdx, rawSize, 128)) {
-                        s_pool.Release(bufIdx);
-                    }
-                }
-            }
+            // Defer the synchronous MPQ read to OnFrameTick so zone transitions
+            // don't block the main thread with our redundant file I/O.
+            DeferredRead dr{};
+            strncpy_s(dr.path, sizeof(dr.path), filename, _TRUNCATE);
+            dr.path_hash = pathHash;
+            s_deferredReads.push_back(dr);
         }
     }
 
@@ -3029,6 +3035,7 @@ void Shutdown(bool terminateServer) {
     s_swap_enable_tick = GetTickCount() + SWAP_STARTUP_GRACE_MS;
     s_swap_world_ready_tick = 0;
     s_swap_world_ready_logged = false;
+    s_deferredReads.clear();
 
     if (terminateServer) {
         AcquireSRWLockExclusive(&s_cacheLock);
@@ -3070,13 +3077,52 @@ void Shutdown(bool terminateServer) {
 }
 
 void OnFrameTick() {
+    InterlockedExchange(&s_uploadsThisFrame, 0);
     ApplyPendingEvictions();
     MarkEvictionsForBudget();
 
-    // Flush log once per frame instead of per-line.
-    // fflush is thread-safe on Windows (CRT serializes stdio internally).
-    if (s_logFile)
+    // Process deferred file reads — spreads MPQ I/O across frames instead of
+    // bursting during zone transitions where it compounds WoW's own loading stall.
+    for (int i = 0; i < MAX_DEFERRED_READS_PER_FRAME && !s_deferredReads.empty(); ++i) {
+        DeferredRead dr = s_deferredReads.front();
+        s_deferredReads.pop_front();
+
+        // Re-check cache — texture may have been decoded while waiting.
+        {
+            AcquireSRWLockShared(&s_cacheLock);
+            auto it = s_cache.find(dr.path_hash);
+            bool cached = (it != s_cache.end() && it->second.valid);
+            ReleaseSRWLockShared(&s_cacheLock);
+            if (cached) continue;
+        }
+
+        int bufIdx = s_pool.Acquire();
+        if (bufIdx < 0) { s_deferredReads.push_front(dr); break; }
+
+        uint8_t *buf = s_pool.Get(bufIdx);
+        uint32_t rawSize = ReadFileViaStorm(dr.path, buf, POOL_BUF_SIZE);
+        if (rawSize == 0) {
+            s_pool.Release(bufIdx);
+            continue;
+        }
+
+        uint64_t dh = DirHash(dr.path);
+        if (dh != 0) {
+            s_recentDirs[s_recentDirIdx % PREFETCH_HISTORY] = dh;
+            s_recentDirIdx++;
+        }
+
+        if (!QueueDecode(dr.path, bufIdx, rawSize, 128))
+            s_pool.Release(bufIdx);
+    }
+
+    // Flush log periodically rather than every frame — fflush is a synchronous
+    // kernel write-through that costs 0.1-2ms per call under Wine.
+    static int s_flushCounter = 0;
+    if (s_logFile && ++s_flushCounter >= 60) {
         fflush(s_logFile);
+        s_flushCounter = 0;
+    }
 }
 
 bool GetDecodedTexture(const char *path, const void *rawData, uint32_t rawSize,
@@ -3241,3 +3287,21 @@ void GetStats(PipelineStats &out) {
 }
 
 } // namespace TexBridge
+
+// ── Protocol drift guard ─────────────────────────────────────────────────
+// TBProto (above) mirrors TexProto (Protocol.h). These static_asserts catch
+// any divergence at compile time.
+#include "../../TextureServer64/shared/Protocol.h"
+static_assert(TBProto::SLOT_COUNT == TexProto::SLOT_COUNT, "SLOT_COUNT mismatch");
+static_assert(TBProto::SLOT_DATA_SIZE == TexProto::SLOT_DATA_SIZE, "SLOT_DATA_SIZE mismatch");
+static_assert(TBProto::SLOT_HEADER_SIZE == TexProto::SLOT_HEADER, "SLOT_HEADER size mismatch");
+static_assert(TBProto::SLOT_TOTAL == TexProto::SLOT_TOTAL, "SLOT_TOTAL mismatch");
+static_assert(TBProto::SHM_WINDOW_COUNT == TexProto::SHM_WINDOW_COUNT, "SHM_WINDOW_COUNT mismatch");
+static_assert(TBProto::SLOTS_PER_WINDOW == TexProto::SLOTS_PER_WINDOW, "SLOTS_PER_WINDOW mismatch");
+static_assert(TBProto::SHM_HEADER_SIZE == TexProto::SHM_HEADER, "SHM_HEADER size mismatch");
+static_assert(TBProto::SHM_MAGIC == TexProto::SHM_MAGIC, "SHM_MAGIC mismatch");
+static_assert(TBProto::SHM_VERSION == TexProto::SHM_VERSION, "SHM_VERSION mismatch");
+static_assert(sizeof(TBProto::Request) == sizeof(TexProto::Request), "Request struct size mismatch");
+static_assert(sizeof(TBProto::Response) == sizeof(TexProto::Response), "Response struct size mismatch");
+static_assert(sizeof(TBProto::SlotHeader) == sizeof(TexProto::SlotHeader), "SlotHeader struct size mismatch");
+static_assert(sizeof(TBProto::ShmHeader) == sizeof(TexProto::ShmHeader), "ShmHeader struct size mismatch");

@@ -247,8 +247,10 @@ void Server::HandleLoad(HANDLE pipe, const std::string& path,
 {
     const std::string cacheKey = NormalizePathKey(path);
 
-    // 1. Check LRU cache.
-    const DecodedTexture* cached = cache_.Get(cacheKey);
+    // 1. Check LRU cache.  Get returns a copy so the pointer is safe to use
+    //    after the cache lock is released (fixes use-after-free on concurrent
+    //    Put/eviction from another thread).
+    auto cached = cache_.Get(cacheKey);
     if (cached) {
         cache_hits_.fetch_add(1, std::memory_order_relaxed);
 
@@ -356,7 +358,7 @@ void Server::HandleLoad(HANDLE pipe, const std::string& path,
 
 void Server::HandleQuery(HANDLE pipe, const std::string& path) {
     const std::string cacheKey = NormalizePathKey(path);
-    const DecodedTexture* cached = cache_.Get(cacheKey);
+    auto cached = cache_.Get(cacheKey);
 
     TexProto::Response resp{};
     if (cached) {

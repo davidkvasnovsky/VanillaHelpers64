@@ -428,6 +428,7 @@ static int __fastcall CGObject_C_SetBlock_h(Game::CGObject_C *thisptr, void * /*
 }
 
 static void __fastcall CGUnit_C_Destructor_h(Game::CGUnit_C *thisptr) {
+    g_overrides.erase(thisptr->m_guid);
     g_original.erase(thisptr->m_guid);
     CGUnit_C_Destructor_o(thisptr);
 }

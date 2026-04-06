@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <list>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <unordered_map>
 
@@ -16,9 +17,9 @@ public:
     explicit LruCache(size_t max_bytes = 4ULL * 1024 * 1024 * 1024);
 
     /// Look up a decoded texture by normalized path.
-    /// Returns pointer to cached texture (valid until next Put/eviction), or nullptr.
+    /// Returns a copy of the cached texture, or nullopt on miss.
     /// Moves the entry to MRU position on hit.
-    const DecodedTexture* Get(const std::string& path);
+    std::optional<DecodedTexture> Get(const std::string& path);
 
     /// Insert (or replace) a decoded texture in the cache.
     /// Evicts LRU entries if the cache exceeds the byte budget.
@@ -51,15 +52,15 @@ inline LruCache::LruCache(size_t max_bytes)
     : max_bytes_(max_bytes)
 {}
 
-inline const DecodedTexture* LruCache::Get(const std::string& path) {
+inline std::optional<DecodedTexture> LruCache::Get(const std::string& path) {
     std::lock_guard<std::mutex> lock(mutex_);
     auto it = map_.find(path);
     if (it == map_.end())
-        return nullptr;
+        return std::nullopt;
 
     // Move to front (MRU).
     order_.splice(order_.begin(), order_, it->second);
-    return &it->second->texture;
+    return it->second->texture;  // copy under lock
 }
 
 inline void LruCache::Put(const std::string& path, DecodedTexture tex) {

@@ -28,12 +28,20 @@ static Game::InitializeGlobal_t InitializeGlobal_o = nullptr;
 static Game::FrameScript_Initialize_t FrameScript_Initialize_o = nullptr;
 static Game::LoadScriptFunctions_t LoadScriptFunctions_o = nullptr;
 static Game::CGGameUI_Shutdown_t CGGameUI_Shutdown_o = nullptr;
+static HMODULE s_hModule = nullptr;
 
 static void __fastcall InvalidFunctionPtrCheck_h() {}
 
 static bool __fastcall InitializeGlobal_h() {
     bool ok = InitializeGlobal_o();
     Texture::InstallCharacterSkin();
+
+    // TexBridge init deferred from DllMain to here — CreateProcess and thread
+    // creation are unsafe under the loader lock (DLL_PROCESS_ATTACH).
+    TexBridge::Initialize(s_hModule);
+    TexBridge::EnsureServerRunning();
+    TexBridge::InstallHooks();
+
     return ok;
 }
 
@@ -63,6 +71,7 @@ static void __fastcall CGGameUI_Shutdown_h() {
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID lpReserved) {
     if (reason == DLL_PROCESS_ATTACH) {
         DisableThreadLibraryCalls(hModule);
+        s_hModule = hModule;
 
         if (MH_Initialize() != MH_OK)
             return FALSE;
@@ -87,12 +96,6 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID lpReserved) {
             return FALSE;
         if (!Texture::InstallHooks())
             return FALSE;
-
-        // TextureServer64 integration: launch server + connect to shared memory.
-        // Non-fatal — if server is unavailable, textures load via the original path.
-        TexBridge::Initialize(hModule);
-        TexBridge::EnsureServerRunning();
-        TexBridge::InstallHooks();
 
     } else if (reason == DLL_PROCESS_DETACH) {
         TexBridge::Shutdown(true);

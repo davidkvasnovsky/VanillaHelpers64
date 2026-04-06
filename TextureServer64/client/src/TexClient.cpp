@@ -2,32 +2,39 @@
 
 #include "TexClient.h"
 #include <cstring>
+#include <string>
 
 namespace TexClient {
 
 // ── Module state ────────────────────────────────────────────────────────
-static HANDLE   s_shm_handle = nullptr;
-static uint8_t* s_shm_base   = nullptr;   // mapped pointer to full SHM region
+static HANDLE   s_shm_header_handle = nullptr;
+static uint8_t* s_shm_header_base   = nullptr;
+
+static HANDLE   s_shm_data_handles[TexProto::SHM_WINDOW_COUNT] = {};
+static uint8_t* s_shm_data_bases[TexProto::SHM_WINDOW_COUNT]   = {};
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 
 static const TexProto::ShmHeader* ShmHeader() {
-    return reinterpret_cast<const TexProto::ShmHeader*>(s_shm_base);
+    return reinterpret_cast<const TexProto::ShmHeader*>(s_shm_header_base);
 }
 
-/// Return pointer to the SlotHeader for a given slot index.
+/// Return pointer to the SlotHeader for a given slot index (windowed layout).
 static TexProto::SlotHeader* SlotHeaderAt(int32_t slot) {
-    const size_t offset = TexProto::SHM_HEADER
-                        + static_cast<size_t>(slot) * TexProto::SLOT_TOTAL;
-    return reinterpret_cast<TexProto::SlotHeader*>(s_shm_base + offset);
+    const uint32_t window      = static_cast<uint32_t>(slot) / TexProto::SLOTS_PER_WINDOW;
+    const uint32_t slotInWindow = static_cast<uint32_t>(slot) % TexProto::SLOTS_PER_WINDOW;
+    return reinterpret_cast<TexProto::SlotHeader*>(
+        s_shm_data_bases[window] +
+        static_cast<uint64_t>(slotInWindow) * TexProto::SLOT_TOTAL);
 }
 
-/// Return pointer to the pixel data region for a given slot index.
+/// Return pointer to the pixel data region for a given slot index (windowed layout).
 static const uint8_t* SlotDataAt(int32_t slot) {
-    const size_t offset = TexProto::SHM_HEADER
-                        + static_cast<size_t>(slot) * TexProto::SLOT_TOTAL
-                        + TexProto::SLOT_HEADER;
-    return s_shm_base + offset;
+    const uint32_t window      = static_cast<uint32_t>(slot) / TexProto::SLOTS_PER_WINDOW;
+    const uint32_t slotInWindow = static_cast<uint32_t>(slot) % TexProto::SLOTS_PER_WINDOW;
+    return s_shm_data_bases[window] +
+           static_cast<uint64_t>(slotInWindow) * TexProto::SLOT_TOTAL +
+           TexProto::SLOT_HEADER;
 }
 
 /// Helper: open the named pipe, send a complete message, receive a Response.
@@ -107,46 +114,59 @@ static bool PipeTransaction(const TexProto::Request& req,
 // ── Public API ──────────────────────────────────────────────────────────
 
 bool Initialize() {
-    if (s_shm_base)
+    if (s_shm_header_base)
         return true;  // already initialised
 
-    // Open existing shared memory created by the 64-bit server.
-    // Using FILE_MAP_ALL_ACCESS so the client can update slot states (ReleaseSlot).
-    s_shm_handle = OpenFileMappingA(FILE_MAP_ALL_ACCESS, FALSE, TexProto::SHM_NAME);
-    if (!s_shm_handle)
+    // Open the header mapping.
+    s_shm_header_handle = OpenFileMappingA(FILE_MAP_ALL_ACCESS, FALSE, TexProto::SHM_NAME);
+    if (!s_shm_header_handle)
         return false;
 
-    s_shm_base = static_cast<uint8_t*>(
-        MapViewOfFile(s_shm_handle, FILE_MAP_ALL_ACCESS, 0, 0, 0));
+    s_shm_header_base = static_cast<uint8_t*>(
+        MapViewOfFile(s_shm_header_handle, FILE_MAP_ALL_ACCESS, 0, 0, 0));
 
-    if (!s_shm_base) {
-        CloseHandle(s_shm_handle);
-        s_shm_handle = nullptr;
+    if (!s_shm_header_base) {
+        CloseHandle(s_shm_header_handle);
+        s_shm_header_handle = nullptr;
         return false;
     }
 
     // Validate the SHM header
     const auto* hdr = ShmHeader();
     if (hdr->magic != TexProto::SHM_MAGIC || hdr->version != TexProto::SHM_VERSION) {
-        UnmapViewOfFile(s_shm_base);
-        s_shm_base = nullptr;
-        CloseHandle(s_shm_handle);
-        s_shm_handle = nullptr;
+        UnmapViewOfFile(s_shm_header_base);
+        s_shm_header_base = nullptr;
+        CloseHandle(s_shm_header_handle);
+        s_shm_header_handle = nullptr;
         return false;
+    }
+
+    // Open the windowed data mappings (must match server's SharedMemory::Create).
+    for (uint32_t w = 0; w < TexProto::SHM_WINDOW_COUNT; ++w) {
+        std::string name = std::string(TexProto::SHM_DATA_NAME_PREFIX) + std::to_string(w);
+        s_shm_data_handles[w] = OpenFileMappingA(FILE_MAP_ALL_ACCESS, FALSE, name.c_str());
+        if (!s_shm_data_handles[w]) {
+            Shutdown();
+            return false;
+        }
+        s_shm_data_bases[w] = static_cast<uint8_t*>(
+            MapViewOfFile(s_shm_data_handles[w], FILE_MAP_ALL_ACCESS, 0, 0, 0));
+        if (!s_shm_data_bases[w]) {
+            Shutdown();
+            return false;
+        }
     }
 
     return true;
 }
 
 void Shutdown() {
-    if (s_shm_base) {
-        UnmapViewOfFile(s_shm_base);
-        s_shm_base = nullptr;
+    for (uint32_t w = 0; w < TexProto::SHM_WINDOW_COUNT; ++w) {
+        if (s_shm_data_bases[w])   { UnmapViewOfFile(s_shm_data_bases[w]);   s_shm_data_bases[w] = nullptr; }
+        if (s_shm_data_handles[w]) { CloseHandle(s_shm_data_handles[w]);     s_shm_data_handles[w] = nullptr; }
     }
-    if (s_shm_handle) {
-        CloseHandle(s_shm_handle);
-        s_shm_handle = nullptr;
-    }
+    if (s_shm_header_base)   { UnmapViewOfFile(s_shm_header_base);   s_shm_header_base = nullptr; }
+    if (s_shm_header_handle) { CloseHandle(s_shm_header_handle);     s_shm_header_handle = nullptr; }
 }
 
 int32_t RequestDecode(const char* path,
@@ -154,7 +174,7 @@ int32_t RequestDecode(const char* path,
                       uint32_t raw_size,
                       uint8_t priority)
 {
-    if (!s_shm_base || !path || !raw_data || raw_size == 0)
+    if (!s_shm_header_base || !path || !raw_data || raw_size == 0)
         return -1;
 
     const auto path_len = static_cast<uint16_t>(strlen(path));
@@ -176,7 +196,7 @@ int32_t RequestDecode(const char* path,
 }
 
 void ReleaseSlot(int32_t slot) {
-    if (!s_shm_base || slot < 0 || slot >= static_cast<int32_t>(TexProto::SLOT_COUNT))
+    if (!s_shm_header_base || slot < 0 || slot >= static_cast<int32_t>(TexProto::SLOT_COUNT))
         return;
 
     TexProto::SlotHeader* hdr = SlotHeaderAt(slot);
@@ -187,7 +207,7 @@ void ReleaseSlot(int32_t slot) {
 }
 
 bool IsTextureCached(const char* path) {
-    if (!s_shm_base || !path)
+    if (!s_shm_header_base || !path)
         return false;
 
     const auto path_len = static_cast<uint16_t>(strlen(path));
@@ -206,7 +226,7 @@ bool IsTextureCached(const char* path) {
 }
 
 bool ReadSlot(int32_t slot, SlotView& view) {
-    if (!s_shm_base || slot < 0 || slot >= static_cast<int32_t>(TexProto::SLOT_COUNT))
+    if (!s_shm_header_base || slot < 0 || slot >= static_cast<int32_t>(TexProto::SLOT_COUNT))
         return false;
 
     const TexProto::SlotHeader* hdr = SlotHeaderAt(slot);
@@ -225,7 +245,7 @@ bool ReadSlot(int32_t slot, SlotView& view) {
 }
 
 bool IsServerAlive() {
-    if (!s_shm_base)
+    if (!s_shm_header_base)
         return false;
 
     const auto* hdr = ShmHeader();
