@@ -5,8 +5,8 @@
 #include "BlpDecoder.h"  // for DecodedTexture
 #include <cstdint>
 #include <list>
+#include <memory>
 #include <mutex>
-#include <optional>
 #include <string>
 #include <unordered_map>
 
@@ -14,12 +14,14 @@ namespace TexServer {
 
 class LruCache {
 public:
+    using TexPtr = std::shared_ptr<const DecodedTexture>;
+
     explicit LruCache(size_t max_bytes = 4ULL * 1024 * 1024 * 1024);
 
     /// Look up a decoded texture by normalized path.
-    /// Returns a copy of the cached texture, or nullopt on miss.
+    /// Returns a shared_ptr to the cached texture (zero-copy), or nullptr on miss.
     /// Moves the entry to MRU position on hit.
-    std::optional<DecodedTexture> Get(const std::string& path);
+    TexPtr Get(const std::string& path);
 
     /// Insert (or replace) a decoded texture in the cache.
     /// Evicts LRU entries if the cache exceeds the byte budget.
@@ -33,8 +35,9 @@ public:
 
 private:
     struct Entry {
-        std::string    path;
-        DecodedTexture texture;
+        std::string path;
+        TexPtr      texture;
+        size_t      bytes;  // cached pixels.size() to avoid deref under lock
     };
 
     void EvictToFit(size_t needed);
@@ -52,15 +55,15 @@ inline LruCache::LruCache(size_t max_bytes)
     : max_bytes_(max_bytes)
 {}
 
-inline std::optional<DecodedTexture> LruCache::Get(const std::string& path) {
+inline LruCache::TexPtr LruCache::Get(const std::string& path) {
     std::lock_guard<std::mutex> lock(mutex_);
     auto it = map_.find(path);
     if (it == map_.end())
-        return std::nullopt;
+        return nullptr;
 
     // Move to front (MRU).
     order_.splice(order_.begin(), order_, it->second);
-    return it->second->texture;  // copy under lock
+    return it->second->texture;  // shared_ptr copy (no pixel copy)
 }
 
 inline void LruCache::Put(const std::string& path, DecodedTexture tex) {
@@ -71,7 +74,7 @@ inline void LruCache::Put(const std::string& path, DecodedTexture tex) {
     // If the entry already exists, remove it first.
     auto existing = map_.find(path);
     if (existing != map_.end()) {
-        current_bytes_ -= existing->second->texture.pixels.size();
+        current_bytes_ -= existing->second->bytes;
         order_.erase(existing->second);
         map_.erase(existing);
     }
@@ -84,7 +87,8 @@ inline void LruCache::Put(const std::string& path, DecodedTexture tex) {
     EvictToFit(tex_bytes);
 
     // Insert at front (MRU).
-    order_.push_front(Entry{path, std::move(tex)});
+    auto ptr = std::make_shared<const DecodedTexture>(std::move(tex));
+    order_.push_front(Entry{path, std::move(ptr), tex_bytes});
     map_[path] = order_.begin();
     current_bytes_ += tex_bytes;
 }
@@ -103,7 +107,7 @@ inline void LruCache::EvictToFit(size_t needed) {
     // Called with mutex_ held.
     while (current_bytes_ + needed > max_bytes_ && !order_.empty()) {
         auto& lru = order_.back();
-        current_bytes_ -= lru.texture.pixels.size();
+        current_bytes_ -= lru.bytes;
         map_.erase(lru.path);
         order_.pop_back();
     }

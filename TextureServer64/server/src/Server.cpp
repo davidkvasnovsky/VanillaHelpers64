@@ -114,9 +114,6 @@ void Server::Run() {
         }
 
         // Wait for a client to connect.  ConnectNamedPipe blocks.
-        printf("[TextureServer] Waiting for pipe connection...\n");
-        fflush(stdout);
-
         BOOL connected = ConnectNamedPipe(pipe, nullptr)
                        ? TRUE
                        : (GetLastError() == ERROR_PIPE_CONNECTED ? TRUE : FALSE);
@@ -128,9 +125,6 @@ void Server::Run() {
             CloseHandle(pipe);
             continue;
         }
-
-        printf("[TextureServer] Client connected!\n");
-        fflush(stdout);
 
         pool_.Submit([this, pipe]() {
             HandleClient(pipe);
@@ -203,11 +197,6 @@ void Server::HandleClient(HANDLE pipe) {
                 break;
         }
 
-        printf("[TextureServer] Request: cmd=%u path='%s' data_size=%u\n",
-               static_cast<unsigned>(req.cmd), path.c_str(),
-               static_cast<unsigned>(raw_data.size()));
-        fflush(stdout);
-
         // Dispatch by command type.
         switch (req.cmd) {
         case TexProto::Cmd::Load:
@@ -247,9 +236,8 @@ void Server::HandleLoad(HANDLE pipe, const std::string& path,
 {
     const std::string cacheKey = NormalizePathKey(path);
 
-    // 1. Check LRU cache.  Get returns a copy so the pointer is safe to use
-    //    after the cache lock is released (fixes use-after-free on concurrent
-    //    Put/eviction from another thread).
+    // 1. Check LRU cache.  Get returns a shared_ptr — zero-copy, safe to use
+    //    after the cache lock is released.
     auto cached = cache_.Get(cacheKey);
     if (cached) {
         cache_hits_.fetch_add(1, std::memory_order_relaxed);
@@ -319,24 +307,14 @@ void Server::HandleLoad(HANDLE pipe, const std::string& path,
         return;
     }
 
-    printf("[TextureServer] Decoded: '%s' -> %ux%u, %u bytes, fmt=%u\n",
-           path.c_str(), decoded.width, decoded.height,
-           static_cast<unsigned>(decoded.pixels.size()), decoded.format);
-    fflush(stdout);
-
     // 5. Place in shared memory.
     int32_t slot = PlaceInSharedMemory(decoded, path);
     if (slot < 0) {
-        printf("[TextureServer] No free slot for '%s'\n", path.c_str());
-        fflush(stdout);
         TexProto::Response resp{};
         resp.status = TexProto::Status::NoSlot;
         SendResponse(pipe, resp);
         return;
     }
-
-    printf("[TextureServer] Placed in slot %d\n", slot);
-    fflush(stdout);
 
     // 6. Cache the decoded texture for future requests.
     TexProto::Response resp{};

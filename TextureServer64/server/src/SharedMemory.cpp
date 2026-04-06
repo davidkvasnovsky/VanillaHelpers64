@@ -142,6 +142,7 @@ uint8_t* SharedMemory::GetSlotData(int32_t slot) {
 int32_t SharedMemory::AllocateSlot() {
     if (!m_pHeaderBase) return -1;
 
+    // Fast path: find an Empty slot.
     for (int32_t i = 0; i < static_cast<int32_t>(TexProto::SLOT_COUNT); ++i) {
         auto* sh = GetSlotHeader(i);
         // Atomic CAS: if state == Empty(0), set to Reading(1).
@@ -154,7 +155,24 @@ int32_t SharedMemory::AllocateSlot() {
             return i;
         }
     }
-    return -1;  // all slots in use
+
+    // Slow path: reclaim stale Ready slots.  If the client crashed without
+    // calling ReleaseSlot, slots can get stuck in Ready state permanently.
+    // Reclaim the first Ready slot we find — the server's LRU cache still
+    // holds the decoded pixels, so the data is not lost.
+    for (int32_t i = 0; i < static_cast<int32_t>(TexProto::SLOT_COUNT); ++i) {
+        auto* sh = GetSlotHeader(i);
+        LONG prev = InterlockedCompareExchange(
+            reinterpret_cast<volatile LONG*>(&sh->state),
+            static_cast<LONG>(TexProto::SlotState::Reading),
+            static_cast<LONG>(TexProto::SlotState::Ready)
+        );
+        if (prev == static_cast<LONG>(TexProto::SlotState::Ready)) {
+            return i;
+        }
+    }
+
+    return -1;  // all slots in use (Reading or Decoding — actively in flight)
 }
 
 void SharedMemory::MarkSlotReady(int32_t slot) {
