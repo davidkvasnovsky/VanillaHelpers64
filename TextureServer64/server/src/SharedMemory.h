@@ -26,7 +26,8 @@ public:
     void Destroy();
 
     /// Returns true if the mapping is valid and usable.
-    [[nodiscard]] auto IsValid() const -> bool;
+    [[nodiscard]]
+    auto IsValid() const -> bool;
 
     /// Access the global header at offset 0.
     auto GetHeader() -> TexProto::ShmHeader*;
@@ -57,6 +58,7 @@ private:
     UniqueMapView m_pHeaderBase;
     std::array<UniqueHandle<>, TexProto::SHM_WINDOW_COUNT> m_hDataMappings;
     std::array<UniqueMapView, TexProto::SHM_WINDOW_COUNT> m_pDataBases;
+    std::array<volatile LONG, TexProto::SLOT_COUNT> m_readyTick{};
 };
 
 } // namespace TexServer

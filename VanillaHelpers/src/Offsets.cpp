@@ -76,7 +76,7 @@ auto LoadFromFile(const char* dllDir) -> bool {
         // Match key against all known offset names.
 #define X(name, default_val)                                                                                           \
     if (strcmp(key, #name) == 0) {                                                                                     \
-        (name) = value;                                                                                                  \
+        (name) = value;                                                                                                \
         continue;                                                                                                      \
     }
         OFFSET_LIST

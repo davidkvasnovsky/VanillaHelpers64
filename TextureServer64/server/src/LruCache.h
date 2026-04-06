@@ -89,7 +89,7 @@ inline void LruCache::Put(const std::string& path, DecodedTexture tex) {
 
     // Insert at front (MRU).
     auto ptr = std::make_shared<const DecodedTexture>(std::move(tex));
-    order_.push_front(Entry{.path=path, .texture=std::move(ptr), .bytes=tex_bytes});
+    order_.push_front(Entry{.path = path, .texture = std::move(ptr), .bytes = tex_bytes});
     map_[path] = order_.begin();
     current_bytes_ += tex_bytes;
 }

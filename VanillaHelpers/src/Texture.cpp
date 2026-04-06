@@ -158,13 +158,13 @@ static auto InitializeNewTexturePool() -> bool {
 }
 
 static void PatchNewTexturePool() {
-    const uint32_t side32 = BUCKETS_PER_SIDE;                       // 6
+    const uint32_t side32 = BUCKETS_PER_SIDE;                    // 6
     const auto side8 = static_cast<uint8_t>(side32);             // 6
-    const uint32_t count = BUCKET_COUNT;                            // 36
-    const uint32_t stride = BUCKET_STRIDE;                          // 12
+    const uint32_t count = BUCKET_COUNT;                         // 36
+    const uint32_t stride = BUCKET_STRIDE;                       // 12
     const auto rowStep8 = static_cast<uint8_t>(side32 * stride); // 6*12 = 72 (0x48)
-    const uint32_t totalBytes = count * stride;                     // 36*12 = 432 (0x1B0)
-    const uint32_t headEnd = g_headBase + totalBytes;               // one past last head
+    const uint32_t totalBytes = count * stride;                  // 36*12 = 432 (0x1B0)
+    const uint32_t headEnd = g_headBase + totalBytes;            // one past last head
 
     // Pool initializer
     Common::PatchBytes(

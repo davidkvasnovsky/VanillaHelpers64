@@ -27,6 +27,11 @@ auto SharedMemory::Create() -> bool {
     if (!m_hHeaderMapping) {
         return false;
     }
+    if (GetLastError() == ERROR_ALREADY_EXISTS) {
+        // Another server already owns this mapping — do not zero live memory.
+        m_hHeaderMapping.reset();
+        return false;
+    }
 
     m_pHeaderBase.reset(MapViewOfFile(
         m_hHeaderMapping.get(),
@@ -51,6 +56,10 @@ auto SharedMemory::Create() -> bool {
             CreateFileMappingA(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE, sizeHigh, sizeLow, mappingName.c_str())
         );
         if (!m_hDataMappings[window]) {
+            Destroy();
+            return false;
+        }
+        if (GetLastError() == ERROR_ALREADY_EXISTS) {
             Destroy();
             return false;
         }
@@ -140,19 +149,27 @@ auto SharedMemory::AllocateSlot() -> int32_t {
         }
     }
 
-    // Slow path: reclaim stale Ready slots.  If the client crashed without
-    // calling ReleaseSlot, slots can get stuck in Ready state permanently.
-    // Reclaim the first Ready slot we find — the server's LRU cache still
-    // holds the decoded pixels, so the data is not lost.
+    // Slow path: reclaim stale Ready slots.  Only reclaim slots that have been
+    // in Ready state for at least READY_LEASE_MS.  The client CASes Ready→Uploaded
+    // before reading, but there is a small window between the server sending the
+    // pipe response and the client performing the CAS.  The lease timeout prevents
+    // the server from recycling a slot during that window.
+    static constexpr DWORD READY_LEASE_MS = 5000;
+    DWORD const now = GetTickCount();
     for (int32_t i = 0; i < static_cast<int32_t>(TexProto::SLOT_COUNT); ++i) {
         auto* sh = GetSlotHeader(i);
-        LONG const prev = InterlockedCompareExchange(
-            reinterpret_cast<volatile LONG*>(&sh->state),
-            static_cast<LONG>(TexProto::SlotState::Reading),
-            static_cast<LONG>(TexProto::SlotState::Ready)
-        );
-        if (prev == static_cast<LONG>(TexProto::SlotState::Ready)) {
-            return i;
+        if (sh->state == static_cast<uint32_t>(TexProto::SlotState::Ready)) {
+            auto const readyAt = static_cast<DWORD>(InterlockedCompareExchange(&m_readyTick[i], 0, 0));
+            if (static_cast<LONG>(now - readyAt) >= static_cast<LONG>(READY_LEASE_MS)) {
+                LONG const prev = InterlockedCompareExchange(
+                    reinterpret_cast<volatile LONG*>(&sh->state),
+                    static_cast<LONG>(TexProto::SlotState::Reading),
+                    static_cast<LONG>(TexProto::SlotState::Ready)
+                );
+                if (prev == static_cast<LONG>(TexProto::SlotState::Ready)) {
+                    return i;
+                }
+            }
         }
     }
 
@@ -164,6 +181,12 @@ void SharedMemory::MarkSlotReady(int32_t slot) {
     if (sh == nullptr) {
         return;
     }
+
+    // Write the ready tick BEFORE publishing Ready state.
+    // Another thread's AllocateSlot reads m_readyTick after seeing state == Ready;
+    // if we wrote the tick after the state transition, it could see Ready with a
+    // stale/zero tick and reclaim the slot immediately.
+    InterlockedExchange(&m_readyTick[slot], static_cast<LONG>(GetTickCount()));
 
     // Set state to Ready (3) — matches SlotState::Ready in Protocol.h.
     InterlockedExchange(reinterpret_cast<volatile LONG*>(&sh->state), static_cast<LONG>(TexProto::SlotState::Ready));

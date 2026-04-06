@@ -137,11 +137,13 @@ static inline auto UsingNativeDisplay(Game::CGPlayer_C* unit) -> bool {
 }
 
 static inline auto
-EvaluateMorphValue(Game::CGPlayer_C* unit, uint32_t fieldIndex, const morphValue_t& morphValue, uint32_t& outValue) -> bool {
+EvaluateMorphValue(Game::CGPlayer_C* unit, uint32_t fieldIndex, const morphValue_t& morphValue, uint32_t& outValue)
+    -> bool {
     if (fieldIndex == Game::UNIT_FIELD_DISPLAYID && std::get<uint32_t>(morphValue) == 0) {
         outValue = (unit->m_data != nullptr) ? unit->m_data->m_unitData.m_nativeDisplayId : 0;
         return true;
-    } if (std::holds_alternative<std::shared_ptr<factionValuesMap_t>>(morphValue)) {
+    }
+    if (std::holds_alternative<std::shared_ptr<factionValuesMap_t>>(morphValue)) {
         auto factionReplacementMap = std::get<std::shared_ptr<factionValuesMap_t>>(morphValue);
         const auto* factionTemplate = Game::DbLookupById<Game::FactionTemplate>(
             *Game::g_factionTemplateDB, unit->m_data->m_unitData.m_factionTemplate
@@ -160,9 +162,9 @@ EvaluateMorphValue(Game::CGPlayer_C* unit, uint32_t fieldIndex, const morphValue
             return true;
         }
         return false;
-    }         outValue = std::get<uint32_t>(morphValue);
-        return true;
-   
+    }
+    outValue = std::get<uint32_t>(morphValue);
+    return true;
 }
 
 static inline auto

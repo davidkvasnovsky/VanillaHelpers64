@@ -995,14 +995,14 @@ struct CStatus {
 };
 
 struct CGxTexFlags {
-    uint32_t m_filter : 3{};
-    uint32_t m_wrapU : 1{};
-    uint32_t m_wrapV : 1{};
-    uint32_t m_forceMipTracking : 1{};
-    uint32_t m_generateMipMaps : 1{};
-    uint32_t m_renderTarget : 1{};
-    uint32_t m_unknownFlag : 1{};
-    uint32_t m_maxAnisotropy : 5{};
+    uint32_t m_filter : 3 {};
+    uint32_t m_wrapU : 1 {};
+    uint32_t m_wrapV : 1 {};
+    uint32_t m_forceMipTracking : 1 {};
+    uint32_t m_generateMipMaps : 1 {};
+    uint32_t m_renderTarget : 1 {};
+    uint32_t m_unknownFlag : 1 {};
+    uint32_t m_maxAnisotropy : 5 {};
 
     CGxTexFlags(
         EGxTexFilter filter,

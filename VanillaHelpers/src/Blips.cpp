@@ -100,7 +100,8 @@ static void TrackObject(Game::MINIMAPINFO* info, Game::CGObject_C* objectptr, ui
     }
 
     objectptr->vftable->GetPosition(objectptr, &unitPos);
-    float const unkScale = info->minimapFrame->FrameScriptPart.vftable->GetUnkScale(&info->minimapFrame->FrameScriptPart);
+    float const unkScale =
+        info->minimapFrame->FrameScriptPart.vftable->GetUnkScale(&info->minimapFrame->FrameScriptPart);
 
     Game::WorldPosToMinimapFrameCoords(
         &minimapPos, nullptr, info->currentPos, info->radius, unitPos.x, unitPos.y, info->layoutScale, unkScale
@@ -519,7 +520,7 @@ static int __fastcall Script_SetUnitBlip(void* L) {
         scale = static_cast<float>(Game::Lua::ToNumber(L, 3));
     }
 
-    g_trackedUnitBlips[unitGUID] = {.texture=texture, .scale=scale};
+    g_trackedUnitBlips[unitGUID] = {.texture = texture, .scale = scale};
 
     return 0;
 }
@@ -569,7 +570,7 @@ static int __fastcall Script_SetObjectTypeBlip(void* L) {
         scale = static_cast<float>(Game::Lua::ToNumber(L, 3));
     }
 
-    Blip const blip = {.texture=texture, .scale=scale};
+    Blip const blip = {.texture = texture, .scale = scale};
 
     const auto itFlag = g_stringToFlag.find(typeName);
     if (itFlag != g_stringToFlag.end()) {

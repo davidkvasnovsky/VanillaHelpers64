@@ -18,7 +18,8 @@ constexpr uint32_t SLOT_DATA_SIZE = 4U * 1024U * 1024U; // 4 MiB
 constexpr uint32_t SLOT_HEADER = 64;                    // bytes
 constexpr uint32_t SLOT_TOTAL = SLOT_HEADER + SLOT_DATA_SIZE;
 constexpr uint32_t SHM_HEADER = 4096;
-constexpr uint64_t SHM_TOTAL_SIZE = static_cast<uint64_t>(SHM_HEADER) + (static_cast<uint64_t>(SLOT_COUNT) * SLOT_TOTAL);
+constexpr uint64_t SHM_TOTAL_SIZE =
+    static_cast<uint64_t>(SHM_HEADER) + (static_cast<uint64_t>(SLOT_COUNT) * SLOT_TOTAL);
 
 // ── Windowed shared-memory layout ──────────────────────────────────────
 // Slot data is split across multiple file mappings to avoid a single huge mapping.

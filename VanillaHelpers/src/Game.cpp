@@ -129,9 +129,8 @@ void Init() {
 // ── CStatus ───────────────────────────────────────────────────────────────
 CStatus::CStatus()
     : vftable(reinterpret_cast<void*>(Offsets::VFTABLE_CSTATUS)),
-      
-      m_head{.prevLink=&m_head, .next=reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(&m_head) | 1U)}
-      {}
+
+      m_head{.prevLink = &m_head, .next = reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(&m_head) | 1U)} {}
 
 CStatus::~CStatus() {
     reinterpret_cast<CStatus_Destructor_t>(Offsets::FUN_CSTATUS_DESTRUCTOR)(this);
@@ -153,9 +152,9 @@ CGxTexFlags::CGxTexFlags(
 }
 
 void DrawMinimapTexture(HTEXTURE__* texture, C2Vector minimapPosition, float scale, bool gray) {
-    CImVector color = {.b=0xFF, .g=0xFF, .r=0xFF, .a=0xFF}; // White
+    CImVector color = {.b = 0xFF, .g = 0xFF, .r = 0xFF, .a = 0xFF}; // White
     if (gray) {
-        color = {.b=0xFF, .g=0xB0, .r=0xB0, .a=0xB0}; //  Dark Gray
+        color = {.b = 0xFF, .g = 0xB0, .r = 0xB0, .a = 0xB0}; //  Dark Gray
     }
 
     C3Vector vertices[4];

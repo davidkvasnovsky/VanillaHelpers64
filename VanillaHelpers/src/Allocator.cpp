@@ -19,8 +19,8 @@
 #include "Offsets.h"
 #include "TexBridge.h"
 
-#include <cstring>
 #include <cstdint>
+#include <cstring>
 
 namespace Allocator {
 

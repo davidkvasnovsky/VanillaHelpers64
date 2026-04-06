@@ -371,7 +371,8 @@ void Server::HandleStats(HANDLE pipe) {
 
 // ── Decode dispatch ────────────────────────────────────────────────────────
 
-auto Server::DecodeRawData(const std::string& path, const std::vector<uint8_t>& raw_data, DecodedTexture& result) -> bool {
+auto Server::DecodeRawData(const std::string& path, const std::vector<uint8_t>& raw_data, DecodedTexture& result)
+    -> bool {
     if (raw_data.empty()) {
         return false;
     }

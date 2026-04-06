@@ -33,7 +33,10 @@ public:
     UniqueHandle(const UniqueHandle&) = delete;
     auto operator=(const UniqueHandle&) -> UniqueHandle& = delete;
 
-    [[nodiscard]] auto get() const noexcept -> HANDLE { return h_; }
+    [[nodiscard]]
+    auto get() const noexcept -> HANDLE {
+        return h_;
+    }
     explicit operator bool() const noexcept { return h_ != Sentinel; }
 
     auto release() noexcept -> HANDLE { return std::exchange(h_, Sentinel); }
@@ -68,7 +71,10 @@ public:
     UniqueMapView(const UniqueMapView&) = delete;
     auto operator=(const UniqueMapView&) -> UniqueMapView& = delete;
 
-    [[nodiscard]] auto get() const noexcept -> uint8_t* { return p_; }
+    [[nodiscard]]
+    auto get() const noexcept -> uint8_t* {
+        return p_;
+    }
     explicit operator bool() const noexcept { return p_ != nullptr; }
 
     auto release() noexcept -> uint8_t* { return std::exchange(p_, nullptr); }

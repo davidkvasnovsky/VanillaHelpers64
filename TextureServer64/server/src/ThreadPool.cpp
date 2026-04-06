@@ -37,7 +37,7 @@ ThreadPool::~ThreadPool() {
 void ThreadPool::Submit(std::function<void()> task, uint8_t priority) {
     {
         std::lock_guard<std::mutex> const lock(mutex_);
-        queue_.push(PriTask{.priority=priority, .sequence=sequence_++, .func=std::move(task)});
+        queue_.push(PriTask{.priority = priority, .sequence = sequence_++, .func = std::move(task)});
     }
     cv_work_.notify_one();
 }

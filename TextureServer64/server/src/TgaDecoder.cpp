@@ -97,7 +97,7 @@ auto TgaDecoder::Decode(const uint8_t* data, size_t size, DecodedTexture& result
                 row_dst[(x * 4) + 0] = row_src[(x * 3) + 0]; // B
                 row_dst[(x * 4) + 1] = row_src[(x * 3) + 1]; // G
                 row_dst[(x * 4) + 2] = row_src[(x * 3) + 2]; // R
-                row_dst[(x * 4) + 3] = 0xFF;               // A
+                row_dst[(x * 4) + 3] = 0xFF;                 // A
             }
         }
     }

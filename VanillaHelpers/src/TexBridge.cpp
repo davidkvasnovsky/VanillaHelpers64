@@ -44,6 +44,7 @@ static constexpr uint32_t SHM_VERSION = 1;
 
 static constexpr uint32_t STATE_EMPTY = 0;
 static constexpr uint32_t STATE_READY = 3;
+static constexpr uint32_t STATE_UPLOADED = 4;
 
 static constexpr uint32_t MAX_INFLIGHT = 16;
 static constexpr uint32_t MAX_QUEUE_MB = 128;
@@ -153,20 +154,17 @@ using D3DDeviceCreateTexture_fn = HRESULT(__stdcall*)(
     void** ppTexture,
     HANDLE* pSharedHandle
 );
-using D3DTextureLockRect_fn = HRESULT(__stdcall*)(
-    void* pThis, uint32_t Level, D3DLOCKED_RECT* pLockedRect, const RECT* pRect, uint32_t Flags
-);
+using D3DTextureLockRect_fn =
+    HRESULT(__stdcall*)(void* pThis, uint32_t Level, D3DLOCKED_RECT* pLockedRect, const RECT* pRect, uint32_t Flags);
 using D3DTextureUnlockRect_fn = HRESULT(__stdcall*)(void* pThis, uint32_t Level);
 using D3DTextureAddRef_fn = ULONG(__stdcall*)(void* pThis);
 using D3DTextureRelease_fn = HRESULT(__stdcall*)(void* pThis);
 using D3DTextureGetDevice_fn = HRESULT(__stdcall*)(void* pThis, void** ppDevice);
 using D3DDeviceUpdateTexture_fn = HRESULT(__stdcall*)(void* pThis, void* srcTexture, void* dstTexture);
-using TextureAllocMain_t = uintptr_t(__fastcall*)(
-    void* thisptr, void* edx, uintptr_t arg1, uintptr_t arg2, uintptr_t arg3
-);
-using TextureAllocFreePayload_t = void(__fastcall*)(
-    void* thisptr, void* edx, void* payload, uintptr_t arg2, uintptr_t arg3
-);
+using TextureAllocMain_t =
+    uintptr_t(__fastcall*)(void* thisptr, void* edx, uintptr_t arg1, uintptr_t arg2, uintptr_t arg3);
+using TextureAllocFreePayload_t =
+    void(__fastcall*)(void* thisptr, void* edx, void* payload, uintptr_t arg2, uintptr_t arg3);
 using RetainedPayloadRead_t = uintptr_t(__fastcall*)(void* thisptr, void* edx, void* dst, uintptr_t size);
 using ReturnRetainedPayload_t = void(__fastcall*)(void* thisptr, void* edxPayload);
 
@@ -548,6 +546,7 @@ struct DefaultPoolEntry {
     bool pending_eviction;
     bool managed_ref_held;
     mutable volatile LONG last_validated_tick;
+    volatile LONG last_touch_tick;
 };
 
 static auto RestoreManagedTextureBinding(const DefaultPoolEntry& entry) -> bool;
@@ -798,7 +797,8 @@ static auto MaxMipLevels(uint32_t width, uint32_t height) -> uint32_t {
 }
 
 static auto
-ClampLevelsToPayload(uint32_t width, uint32_t height, uint8_t format, uint32_t requestedLevels, uint32_t dataSize) -> uint32_t {
+ClampLevelsToPayload(uint32_t width, uint32_t height, uint8_t format, uint32_t requestedLevels, uint32_t dataSize)
+    -> uint32_t {
     uint32_t const maxLevels = MaxMipLevels(width, height);
     uint32_t levels = requestedLevels == 0 ? 1U : requestedLevels;
     levels = std::min(levels, maxLevels);
@@ -820,7 +820,7 @@ static auto ValidateD3DObject(void* obj, SIZE_T vtableBytes, const char* op) -> 
         LogWrite("D3D9_TEXTURE_INVALID: op=%s tex=%p bad-ptr", op, obj);
         return nullptr;
     }
-    auto *vtable = *reinterpret_cast<uint32_t**>(obj);
+    auto* vtable = *reinterpret_cast<uint32_t**>(obj);
     if ((vtable == nullptr) || (IsBadReadPtr(vtable, vtableBytes) != 0)) {
         LogWrite("D3D9_TEXTURE_INVALID: op=%s tex=%p vtable=%p", op, obj, vtable);
         return nullptr;
@@ -872,7 +872,8 @@ static auto GetTrackedTexturePath(uintptr_t textureKey) -> std::string {
 }
 
 static auto GetActiveTextureAllocPathForLog() -> const char* {
-    return ((s_activeTextureAllocPath != nullptr) && (*s_activeTextureAllocPath != 0)) ? s_activeTextureAllocPath : "<none>";
+    return ((s_activeTextureAllocPath != nullptr) && (*s_activeTextureAllocPath != 0)) ? s_activeTextureAllocPath
+                                                                                       : "<none>";
 }
 
 static auto IsFocusedMain0573(uintptr_t arg2, uintptr_t arg3) -> bool {
@@ -1049,17 +1050,40 @@ static void ReleaseTrackedTextureOnShutdown(DefaultPoolEntry& entry) {
     entry.managed_ref_held = false;
 }
 
-static void ClearDefaultPoolTracking(uintptr_t textureKey, bool allowRestore, const char* reason) {
+static void ClearDefaultPoolTracking(uintptr_t textureKey, bool allowRestore, bool keepOnFailure, const char* reason) {
     AcquireSRWLockExclusive(&s_defaultPoolLock);
     auto poolIt = s_defaultPoolMap.find(textureKey);
     if (poolIt != s_defaultPoolMap.end()) {
         auto entryIt = poolIt->second;
+        bool const released = ReleaseTrackedTexture(*entryIt, allowRestore, reason);
+        if (!released && allowRestore) {
+            if (keepOnFailure) {
+                // Stale-track: keep entry for retry on next eviction pass.
+                // ReleaseTrackedTexture already cleared pending_eviction.
+                ReleaseSRWLockExclusive(&s_defaultPoolLock);
+                return;
+            }
+            // Destroy path: texture is dying — best-effort force-release of our D3D refs.
+            LogWrite(
+                "DEFAULT_SWAP_FORCE_RELEASE: reason=%s texture=%p defaultTex=%p managedTex=%p",
+                (reason != nullptr) ? reason : "unknown",
+                reinterpret_cast<void*>(textureKey),
+                entryIt->default_tex,
+                entryIt->managed_tex
+            );
+            ReleaseD3DTexture(entryIt->default_tex);
+            entryIt->default_tex = nullptr;
+            if (entryIt->managed_ref_held) {
+                ReleaseD3DTexture(entryIt->managed_tex);
+            }
+            entryIt->managed_tex = nullptr;
+            entryIt->managed_ref_held = false;
+        }
         if (entryIt->size_bytes <= s_defaultPoolBytes) {
             s_defaultPoolBytes -= entryIt->size_bytes;
         } else {
             s_defaultPoolBytes = 0;
         }
-        ReleaseTrackedTexture(*entryIt, allowRestore, reason);
         s_defaultPoolMap.erase(poolIt);
         s_defaultPoolLru.erase(entryIt);
     }
@@ -1068,7 +1092,7 @@ static void ClearDefaultPoolTracking(uintptr_t textureKey, bool allowRestore, co
 }
 
 static void ClearTrackedTextureState(uintptr_t textureKey) {
-    ClearDefaultPoolTracking(textureKey, true, "clear-tracked-state");
+    ClearDefaultPoolTracking(textureKey, true, false, "clear-tracked-state");
     ClearPendingMain0573Payload(textureKey);
 
     AcquireSRWLockExclusive(&s_probedSetLock);
@@ -1251,7 +1275,11 @@ static void QuarantineTextureSwap(uintptr_t textureKey, uint64_t pathHash, const
     ReleaseSRWLockExclusive(&s_texMapLock);
 
     if (insertedTex || insertedPath) {
-        LogWrite("DEFAULT_SWAP_SKIP: quarantined '%s' reason=%s", (path != nullptr) ? path : "<null>", (reason != nullptr) ? reason : "unknown");
+        LogWrite(
+            "DEFAULT_SWAP_SKIP: quarantined '%s' reason=%s",
+            (path != nullptr) ? path : "<null>",
+            (reason != nullptr) ? reason : "unknown"
+        );
     }
 }
 
@@ -1370,50 +1398,105 @@ static auto ReadInlineTexturePath(Game::HTEXTURE__* texture, const char* storedP
     return true;
 }
 
-// Returns true if the texture is already tracked in the DEFAULT pool with
-// matching pathHash (i.e., already swapped and valid — no further work needed).
-static auto TouchDefaultPoolEntry(uintptr_t textureKey, uint64_t pathHash) -> bool {
+static std::atomic<bool> s_hasPendingLruTouches{false};
+
+// Exclusive-lock slow path for TouchDefaultPoolEntry: handles path mismatch,
+// pending eviction cancellation, and LRU splice for rare cases.
+static auto TouchDefaultPoolEntry_SlowPath(uintptr_t textureKey, uint64_t pathHash, DWORD tickNow) -> bool {
     AcquireSRWLockExclusive(&s_defaultPoolLock);
     auto it = s_defaultPoolMap.find(textureKey);
-    if (it != s_defaultPoolMap.end()) {
-        if (it->second->path_hash != pathHash) {
-            auto entryIt = it->second;
-            if (entryIt->size_bytes <= s_defaultPoolBytes) {
-                s_defaultPoolBytes -= entryIt->size_bytes;
-            } else {
-                s_defaultPoolBytes = 0;
-            }
-            ReleaseTrackedTexture(*entryIt, false, "touch-path-mismatch");
-            s_defaultPoolMap.erase(it);
-            s_defaultPoolLru.erase(entryIt);
-            ReleaseSRWLockExclusive(&s_defaultPoolLock);
-            return false;
-        }
-        if (it->second->pending_eviction) {
-            it->second->pending_eviction = false;
-            LogWrite(
-                "DEFAULT_SWAP_TOUCH_CANCEL_EVICT: texture=%p pathHash=0x%llX",
-                reinterpret_cast<void*>(textureKey),
-                static_cast<unsigned long long>(pathHash)
-            );
-        }
-        LONG const touchCount = s_stat_default_touch_logs.fetch_add(1, std::memory_order_relaxed) + 1;
-        if (touchCount <= 200 || (touchCount % 500) == 0) {
-            LogWrite(
-                "DEFAULT_SWAP_TOUCH: texture=%p pathHash=0x%llX defaultTex=%p managedTex=%p size=%u",
-                reinterpret_cast<void*>(textureKey),
-                static_cast<unsigned long long>(pathHash),
-                it->second->default_tex,
-                it->second->managed_tex,
-                static_cast<unsigned>(it->second->size_bytes)
-            );
-        }
-        s_defaultPoolLru.splice(s_defaultPoolLru.begin(), s_defaultPoolLru, it->second);
+    if (it == s_defaultPoolMap.end()) {
         ReleaseSRWLockExclusive(&s_defaultPoolLock);
-        return true;
+        return false;
     }
+    if (it->second->path_hash != pathHash) {
+        // Path-mismatch cleanup (required before caller falls through to TrySwapToDefaultPool).
+        auto entryIt = it->second;
+        if (entryIt->size_bytes <= s_defaultPoolBytes) {
+            s_defaultPoolBytes -= entryIt->size_bytes;
+        } else {
+            s_defaultPoolBytes = 0;
+        }
+        ReleaseTrackedTexture(*entryIt, false, "touch-path-mismatch");
+        s_defaultPoolMap.erase(it);
+        s_defaultPoolLru.erase(entryIt);
+        ReleaseSRWLockExclusive(&s_defaultPoolLock);
+        return false;
+    }
+    if (it->second->pending_eviction) {
+        it->second->pending_eviction = false;
+        LogWrite(
+            "DEFAULT_SWAP_TOUCH_CANCEL_EVICT: texture=%p pathHash=0x%llX",
+            reinterpret_cast<void*>(textureKey),
+            static_cast<unsigned long long>(pathHash)
+        );
+    }
+    LONG const touchCount = s_stat_default_touch_logs.fetch_add(1, std::memory_order_relaxed) + 1;
+    if (touchCount <= 200 || (touchCount % 500) == 0) {
+        LogWrite(
+            "DEFAULT_SWAP_TOUCH: texture=%p pathHash=0x%llX defaultTex=%p managedTex=%p size=%u",
+            reinterpret_cast<void*>(textureKey),
+            static_cast<unsigned long long>(pathHash),
+            it->second->default_tex,
+            it->second->managed_tex,
+            static_cast<unsigned>(it->second->size_bytes)
+        );
+    }
+    s_defaultPoolLru.splice(s_defaultPoolLru.begin(), s_defaultPoolLru, it->second);
+    InterlockedExchange(&it->second->last_touch_tick, static_cast<LONG>(tickNow));
+    s_hasPendingLruTouches.store(true, std::memory_order_relaxed);
     ReleaseSRWLockExclusive(&s_defaultPoolLock);
-    return false;
+    return true;
+}
+
+// Returns true if the texture is already tracked in the DEFAULT pool with
+// matching pathHash (i.e., already swapped and valid — no further work needed).
+// Uses a shared lock for the common hit path; LRU splice is deferred to
+// FlushLruTouches() in OnFrameTick to avoid per-bind exclusive locks.
+static auto TouchDefaultPoolEntry(uintptr_t textureKey, uint64_t pathHash, DWORD tickNow) -> bool {
+    AcquireSRWLockShared(&s_defaultPoolLock);
+    auto it = s_defaultPoolMap.find(textureKey);
+    if (it == s_defaultPoolMap.end()) {
+        ReleaseSRWLockShared(&s_defaultPoolLock);
+        return false;
+    }
+    if (it->second->path_hash != pathHash) {
+        ReleaseSRWLockShared(&s_defaultPoolLock);
+        return TouchDefaultPoolEntry_SlowPath(textureKey, pathHash, tickNow);
+    }
+    if (it->second->pending_eviction) {
+        ReleaseSRWLockShared(&s_defaultPoolLock);
+        return TouchDefaultPoolEntry_SlowPath(textureKey, pathHash, tickNow);
+    }
+    // Common path: mark as touched, defer LRU splice to OnFrameTick.
+    InterlockedExchange(&it->second->last_touch_tick, static_cast<LONG>(tickNow));
+    s_hasPendingLruTouches.store(true, std::memory_order_relaxed);
+    ReleaseSRWLockShared(&s_defaultPoolLock);
+    return true;
+}
+
+// Batch LRU splicing: moves recently-touched entries to the front of the LRU
+// under a single exclusive lock per frame (called from OnFrameTick).
+static void FlushLruTouches() {
+    if (!s_hasPendingLruTouches.load(std::memory_order_relaxed)) {
+        return;
+    }
+    DWORD const tickNow = GetTickCount();
+    AcquireSRWLockExclusive(&s_defaultPoolLock);
+    for (auto it = s_defaultPoolLru.begin(); it != s_defaultPoolLru.end();) {
+        // Save next before splice (splice moves the node's position in the list).
+        auto next = std::next(it);
+        auto const lastTouch = static_cast<DWORD>(InterlockedCompareExchange(&it->last_touch_tick, 0, 0));
+        if (lastTouch != 0 && static_cast<LONG>(tickNow - lastTouch) < 50) {
+            s_defaultPoolLru.splice(s_defaultPoolLru.begin(), s_defaultPoolLru, it);
+            // Clear after splice to avoid re-splicing the same entry for
+            // multiple ticks within the 50ms window.
+            InterlockedExchange(&it->last_touch_tick, 0);
+        }
+        it = next;
+    }
+    s_hasPendingLruTouches.store(false, std::memory_order_relaxed);
+    ReleaseSRWLockExclusive(&s_defaultPoolLock);
 }
 
 static std::atomic<bool> s_hasPendingEvictions{false};
@@ -1604,16 +1687,17 @@ static void TrackDefaultPoolTexture(
     } else {
         s_defaultPoolLru.push_front(
             DefaultPoolEntry{
-                .texture_key=textureKey,
-                .path_hash=pathHash,
-                .default_tex=defaultTex,
-                .managed_tex=managedTex,
-                .size_bytes=sizeBytes,
-                .residency_class=residencyClass,
-                .protect_passes=static_cast<uint8_t>(residencyClass >= 2 ? 2 : 1),
-                .pending_eviction=false,
-                .managed_ref_held=true,
-                .last_validated_tick=static_cast<LONG>(GetTickCount())
+                .texture_key = textureKey,
+                .path_hash = pathHash,
+                .default_tex = defaultTex,
+                .managed_tex = managedTex,
+                .size_bytes = sizeBytes,
+                .residency_class = residencyClass,
+                .protect_passes = static_cast<uint8_t>(residencyClass >= 2 ? 2 : 1),
+                .pending_eviction = false,
+                .managed_ref_held = true,
+                .last_validated_tick = static_cast<LONG>(GetTickCount()),
+                .last_touch_tick = 0
             }
         );
         s_defaultPoolMap[textureKey] = s_defaultPoolLru.begin();
@@ -1751,18 +1835,18 @@ static void CloseSharedMemory() {
     }
 }
 
-static auto GetSlotHeader(int32_t slot) -> const TBProto::SlotHeader* {
+static auto GetSlotHeader(int32_t slot) -> TBProto::SlotHeader* {
     if ((s_shmHeaderBase == nullptr) || slot < 0 || slot >= static_cast<int32_t>(TBProto::SLOT_COUNT)) {
         return nullptr;
     }
     const uint32_t window = static_cast<uint32_t>(slot) / TBProto::SLOTS_PER_WINDOW;
     const uint32_t slotInWindow = static_cast<uint32_t>(slot) % TBProto::SLOTS_PER_WINDOW;
-    return reinterpret_cast<const TBProto::SlotHeader*>(
+    return reinterpret_cast<TBProto::SlotHeader*>(
         s_shmDataBases[window] + (static_cast<uint64_t>(slotInWindow) * TBProto::SLOT_TOTAL)
     );
 }
 
-static auto GetSlotData(int32_t slot) -> const uint8_t* {
+static auto GetSlotData(int32_t slot) -> uint8_t* {
     if ((s_shmHeaderBase == nullptr) || slot < 0 || slot >= static_cast<int32_t>(TBProto::SLOT_COUNT)) {
         return nullptr;
     }
@@ -1805,7 +1889,26 @@ static auto ReadPipeFull(HANDLE pipe, void* data, uint32_t size) -> bool {
 
 // ── Send decode request to server ────────────────────────────────────
 
+static volatile LONG s_reconnecting = 0;
+
 static auto ReconnectServer() -> bool {
+    if (InterlockedCompareExchange(&s_reconnecting, 1, 0) != 0) {
+        // Another thread is reconnecting — wait for it to finish.
+        // EnsureServerRunning can take ~6.5s (500ms event retries + 3s event wait
+        // + 3s polling fallback), so wait up to 8s before giving up.
+        for (int i = 0; i < 16; ++i) {
+            Sleep(500);
+            if (InterlockedCompareExchange(&s_reconnecting, 0, 0) == 0) {
+                break;
+            }
+        }
+        // Only attempt OpenSharedMemory after the owner finished (s_reconnecting cleared).
+        // If the owner is still running (loop exhausted), return false — let the caller retry.
+        if (InterlockedCompareExchange(&s_reconnecting, 0, 0) != 0) {
+            return false;
+        }
+        return s_server_available;
+    }
     LogWrite("ReconnectServer: attempting reconnect");
     bool const ok = EnsureServerRunning();
     if (!ok) {
@@ -1813,6 +1916,7 @@ static auto ReconnectServer() -> bool {
         s_server_available = false;
     }
     LogWrite("ReconnectServer: %s", ok ? "OK" : "FAILED");
+    InterlockedExchange(&s_reconnecting, 0);
     return ok;
 }
 
@@ -1862,7 +1966,8 @@ static void ClosePersistentPipes() {
 }
 
 static auto
-SendToServer(const char* path, const uint8_t* rawData, uint32_t rawSize, uint8_t priority, TBProto::Response* outResp) -> int32_t {
+SendToServer(const char* path, const uint8_t* rawData, uint32_t rawSize, uint8_t priority, TBProto::Response* outResp)
+    -> int32_t {
     HANDLE pipe = AcquirePersistentPipe();
     if (pipe == INVALID_HANDLE_VALUE) {
         DWORD const err = GetLastError();
@@ -2183,7 +2288,15 @@ static void StopWorker() {
     }
     for (int i = 0; i < WORKER_COUNT; ++i) {
         if (s_workerThreads[i] != nullptr) {
-            WaitForSingleObject(s_workerThreads[i], 3000);
+            DWORD const waitResult = WaitForSingleObject(s_workerThreads[i], 3000);
+            if (waitResult == WAIT_TIMEOUT) {
+                // TerminateThread is acceptable here because StopWorker is only
+                // called from Shutdown(terminateServer=true) at game exit.
+                LogWrite("StopWorker: thread %d did not exit in 3s, terminating", i);
+                TerminateThread(s_workerThreads[i], 1);
+            } else if (waitResult == WAIT_FAILED) {
+                LogWrite("StopWorker: WaitForSingleObject failed for thread %d, err=%lu", i, GetLastError());
+            }
             CloseHandle(s_workerThreads[i]);
             s_workerThreads[i] = nullptr;
         }
@@ -2311,7 +2424,8 @@ static auto RestoreManagedTextureBinding(const DefaultPoolEntry& entry) -> bool 
 // Between validations, trust the fast pointer comparison.
 static constexpr DWORD STALE_VALIDATE_INTERVAL_MS = 900;
 
-static auto IsTrackedBindingStale(Game::HTEXTURE__* texture, Game::CGxTex* gxTex, uint64_t pathHash, DWORD now) -> bool {
+static auto IsTrackedBindingStale(Game::HTEXTURE__* texture, Game::CGxTex* gxTex, uint64_t pathHash, DWORD now)
+    -> bool {
     if ((texture == nullptr) || (gxTex == nullptr)) {
         return true;
     }
@@ -2500,10 +2614,16 @@ static void FlushAllDefaultPoolTextures(const char* reason) {
     }
     s_restoredManagedRefs.clear();
     ReleaseSRWLockExclusive(&s_defaultPoolLock);
-    LogWrite("DEVICE_RESET_FLUSH: reason=%s flushed=%zu DEFAULT pool textures", (reason != nullptr) ? reason : "unknown", count);
+    LogWrite(
+        "DEVICE_RESET_FLUSH: reason=%s flushed=%zu DEFAULT pool textures",
+        (reason != nullptr) ? reason : "unknown",
+        count
+    );
 }
 
-static auto TrySwapToDefaultPool(Game::HTEXTURE__* texture, Game::CGxTex* gxTex, uint64_t pathHash, const char* path) -> bool {
+static auto
+TrySwapToDefaultPool(Game::HTEXTURE__* texture, Game::CGxTex* gxTex, uint64_t pathHash, const char* path, DWORD tickNow)
+    -> bool {
     if ((texture == nullptr) || (gxTex == nullptr) || (path == nullptr)) {
         return false;
     }
@@ -2547,9 +2667,9 @@ static auto TrySwapToDefaultPool(Game::HTEXTURE__* texture, Game::CGxTex* gxTex,
     if (!DescribeD3DTexture(managedTex, &currentDesc, "swap-live-check")) {
         return false;
     }
-    auto *texVtable = *reinterpret_cast<uint32_t**>(managedTex);
+    auto* texVtable = *reinterpret_cast<uint32_t**>(managedTex);
     if (currentDesc.Pool == D3DPOOL_DEFAULT) {
-        TouchDefaultPoolEntry(textureKey, pathHash);
+        TouchDefaultPoolEntry(textureKey, pathHash, tickNow);
         return true;
     }
 
@@ -2594,7 +2714,7 @@ static auto TrySwapToDefaultPool(Game::HTEXTURE__* texture, Game::CGxTex* gxTex,
         return false;
     }
 
-    auto *devVtable = *reinterpret_cast<uint32_t**>(device);
+    auto* devVtable = *reinterpret_cast<uint32_t**>(device);
     auto fnCreateTexture = reinterpret_cast<D3DDeviceCreateTexture_fn>(devVtable[23]);
     auto fnUpdateTexture = reinterpret_cast<D3DDeviceUpdateTexture_fn>(devVtable[31]);
     void* defaultTex = nullptr;
@@ -2626,7 +2746,7 @@ static auto TrySwapToDefaultPool(Game::HTEXTURE__* texture, Game::CGxTex* gxTex,
         return false;
     }
 
-    auto *stagingVtable = *reinterpret_cast<uint32_t**>(stagingTex);
+    auto* stagingVtable = *reinterpret_cast<uint32_t**>(stagingTex);
     auto fnLockRect = reinterpret_cast<D3DTextureLockRect_fn>(stagingVtable[19]);
     auto fnUnlockRect = reinterpret_cast<D3DTextureUnlockRect_fn>(stagingVtable[20]);
 
@@ -2717,7 +2837,8 @@ static auto TrySwapToDefaultPool(Game::HTEXTURE__* texture, Game::CGxTex* gxTex,
     mutableGxWords[OFF_GX_D3DTEX / 4] = reinterpret_cast<uint32_t>(defaultTex);
     ReleaseSlot(info.slot);
 
-    uint32_t const trackedBytes = ComputeTextureBytes(info.width, info.height, info.format, static_cast<uint8_t>(levels));
+    uint32_t const trackedBytes =
+        ComputeTextureBytes(info.width, info.height, info.format, static_cast<uint8_t>(levels));
     uint8_t const residencyClass = ResidencyClassForPath(path);
     LogWrite(
         "DEFAULT_SWAP_INSTALL: texture=%p gxTex=%p path='%s' managedTex=%p defaultTex=%p size=%u class=%u dims=%ux%u "
@@ -2972,7 +3093,8 @@ static Game::CGxTex* __fastcall TextureGetGxTex_h(
     // Call original — this triggers decode + D3D upload if not already done.
     s_activeTextureAllocKey = textureKey;
     s_activeTextureAllocPathHash = pathHash;
-    s_activeTextureAllocPath = ((trackedPathPtr != nullptr) && !trackedPathPtr->empty()) ? trackedPathPtr->c_str() : nullptr;
+    s_activeTextureAllocPath =
+        ((trackedPathPtr != nullptr) && !trackedPathPtr->empty()) ? trackedPathPtr->c_str() : nullptr;
     Game::CGxTex* gxTex = TextureGetGxTex_o(texture, edx, status);
     s_activeTextureAllocPath = nullptr;
     s_activeTextureAllocKey = 0;
@@ -3012,14 +3134,14 @@ static Game::CGxTex* __fastcall TextureGetGxTex_h(
             gxTex,
             static_cast<unsigned long long>(pathHash)
         );
-        ClearDefaultPoolTracking(textureKey, true, "stale-track");
+        ClearDefaultPoolTracking(textureKey, true, true, "stale-track");
         return gxTex;
     }
 
     // Touch the LRU entry and check if already in DEFAULT pool.
     // If already swapped, skip TrySwapToDefaultPool (avoids redundant
     // quarantine check, DescribeD3DTexture COM calls, and double-touch).
-    if (TouchDefaultPoolEntry(textureKey, pathHash)) {
+    if (TouchDefaultPoolEntry(textureKey, pathHash, tickNow)) {
         return gxTex;
     }
 
@@ -3027,7 +3149,7 @@ static Game::CGxTex* __fastcall TextureGetGxTex_h(
         const auto* gxWords = reinterpret_cast<const uint32_t*>(gxTex);
         void* managedTex = reinterpret_cast<void*>(gxWords[OFF_GX_D3DTEX / 4]);
         if (managedTex != nullptr) {
-            TrySwapToDefaultPool(texture, gxTex, pathHash, trackedPath.c_str());
+            TrySwapToDefaultPool(texture, gxTex, pathHash, trackedPath.c_str(), tickNow);
         } else {
             AcquireSRWLockExclusive(&s_probedSetLock);
             s_probedSet.erase(textureKey);
@@ -3509,7 +3631,12 @@ void Shutdown(bool terminateServer) {
 
     AcquireSRWLockExclusive(&s_main0573PayloadLock);
     s_pendingMain0573Payloads.clear();
-    s_earlyReleasedPayloads.clear();
+    // Shutdown(false) runs while hooks remain installed. Keep duplicate-free
+    // markers alive until Shutdown(true) so late WoW frees are still
+    // recognized after an earlier TEXTURE_ALLOC_MAIN_0573_RELEASE.
+    if (terminateServer) {
+        s_earlyReleasedPayloads.clear();
+    }
     ReleaseSRWLockExclusive(&s_main0573PayloadLock);
 
     s_activeTextureAllocKey = 0;
@@ -3584,6 +3711,7 @@ void Shutdown(bool terminateServer) {
 
 void OnFrameTick() {
     s_uploadsThisFrame.store(0, std::memory_order_relaxed);
+    FlushLruTouches();
     ApplyPendingEvictions();
     MarkEvictionsForBudget();
 
@@ -3658,10 +3786,25 @@ void OnFrameTick() {
     }
 }
 
-static auto FillDecodedInfo(DecodedInfo& info, int32_t slot) -> bool {
-    const TBProto::SlotHeader* sh = GetSlotHeader(slot);
-    const uint8_t* pixels = GetSlotData(slot);
-    if ((sh == nullptr) || (pixels == nullptr) || sh->state != TBProto::STATE_READY) {
+static auto FillDecodedInfo(DecodedInfo& info, int32_t slot, uint64_t expectedHash) -> bool {
+    TBProto::SlotHeader* sh = GetSlotHeader(slot);
+    uint8_t* pixels = GetSlotData(slot);
+    if ((sh == nullptr) || (pixels == nullptr)) {
+        return false;
+    }
+    // Atomically claim: Ready → Uploaded.
+    // If the server already reclaimed (Ready → Reading), CAS fails safely.
+    LONG const prev = InterlockedCompareExchange(
+        reinterpret_cast<volatile LONG*>(&sh->state),
+        static_cast<LONG>(TBProto::STATE_UPLOADED),
+        static_cast<LONG>(TBProto::STATE_READY)
+    );
+    if (prev != static_cast<LONG>(TBProto::STATE_READY)) {
+        return false;
+    }
+    // Defense-in-depth: verify the slot still holds the expected texture.
+    if (sh->path_hash != expectedHash) {
+        InterlockedExchange(reinterpret_cast<volatile LONG*>(&sh->state), static_cast<LONG>(TBProto::STATE_EMPTY));
         return false;
     }
     info.slot = slot;
@@ -3704,10 +3847,10 @@ auto GetDecodedTexture(const char* path, const void* rawData, uint32_t rawSize, 
         TBProto::Response resp{};
         int32_t const slot = SendToServer(path, nullptr, 0, 0, &resp);
         if (slot >= 0) {
-            if (FillDecodedInfo(info, slot)) {
+            if (FillDecodedInfo(info, slot, pathHash)) {
                 return true;
             }
-            ReleaseSlot(slot);
+            // Do not ReleaseSlot — if CAS failed, server owns the slot.
         }
 
         if (resp.status == TBProto::STATUS_NOT_FOUND) {
@@ -3746,8 +3889,8 @@ auto GetDecodedTexture(const char* path, const void* rawData, uint32_t rawSize, 
         return false;
     }
 
-    if (!FillDecodedInfo(info, slot)) {
-        ReleaseSlot(slot);
+    if (!FillDecodedInfo(info, slot, pathHash)) {
+        // Do not ReleaseSlot — if CAS failed, server owns the slot.
         return false;
     }
 
@@ -3816,5 +3959,8 @@ static_assert(TBProto::SHM_MAGIC == TexProto::SHM_MAGIC, "SHM_MAGIC mismatch");
 static_assert(TBProto::SHM_VERSION == TexProto::SHM_VERSION, "SHM_VERSION mismatch");
 static_assert(sizeof(TBProto::Request) == sizeof(TexProto::Request), "Request struct size mismatch");
 static_assert(sizeof(TBProto::Response) == sizeof(TexProto::Response), "Response struct size mismatch");
+static_assert(
+    TBProto::STATE_UPLOADED == static_cast<uint32_t>(TexProto::SlotState::Uploaded), "STATE_UPLOADED mismatch"
+);
 static_assert(sizeof(TBProto::SlotHeader) == sizeof(TexProto::SlotHeader), "SlotHeader struct size mismatch");
 static_assert(sizeof(TBProto::ShmHeader) == sizeof(TexProto::ShmHeader), "ShmHeader struct size mismatch");

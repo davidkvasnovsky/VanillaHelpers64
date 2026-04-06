@@ -107,7 +107,7 @@ WoW.exe ← VanillaHelpers.dll (32-bit, MinHook)
 
 - **Request** (8 bytes packed): cmd, priority, path_len, data_size — followed by path + raw file bytes
 - **Response** (19 bytes packed): status, slot_id, width, height, data_size, pixel_format, mip_levels
-- **Slot states**: EMPTY→READING→DECODING→READY→UPLOADED, then server-side reclaim to READING. Uploaded slots are reusable immediately; stale Ready slots are reclaimed after a 5s timeout via `ready_tick`. (`volatile uint32_t`, lock-free polling)
+- **Slot states**: EMPTY→READING→DECODING→READY→UPLOADED→EMPTY. Client CASes Ready→Uploaded before reading slot data; server only reclaims Ready slots older than 5s (lease timeout). (`volatile uint32_t`, lock-free polling via `Interlocked*`)
 - **Path hash**: FNV-1a with slash normalization (`/`→`\`) and case folding
 
 ### Initialization sequence (DllMain.cpp)

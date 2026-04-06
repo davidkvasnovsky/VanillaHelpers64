@@ -18,7 +18,7 @@ namespace Common {
 #define HOOK_FUNCTION(offset, hook, original)                                                                          \
     {                                                                                                                  \
         auto* target = reinterpret_cast<LPVOID>(offset);                                                               \
-        if (MH_CreateHook(target, reinterpret_cast<LPVOID>(hook), reinterpret_cast<LPVOID*>(&(original))) != MH_OK)      \
+        if (MH_CreateHook(target, reinterpret_cast<LPVOID>(hook), reinterpret_cast<LPVOID*>(&(original))) != MH_OK)    \
             return FALSE;                                                                                              \
         if (MH_EnableHook(target) != MH_OK)                                                                            \
             return FALSE;                                                                                              \
