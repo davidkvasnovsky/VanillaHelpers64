@@ -40,7 +40,8 @@ endif()
 
 target_compile_definitions(
   ${PROJECT_NAME}
-  PRIVATE VANILLAHELPERS_VERSION_VALUE=${VANILLAHELPERS_VERSION_VALUE})
+  PRIVATE VANILLAHELPERS_VERSION_VALUE=${VANILLAHELPERS_VERSION_VALUE}
+          NOMINMAX)
 
 # Link MinHook to your project
 target_link_libraries(${PROJECT_NAME} PRIVATE minhook)
