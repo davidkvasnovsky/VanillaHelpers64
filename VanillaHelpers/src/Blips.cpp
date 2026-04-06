@@ -12,6 +12,7 @@
 // VanillaHelpers. If not, see <https://www.gnu.org/licenses/>.
 
 #include "Blips.h"
+
 #include "Common.h"
 #include "Game.h"
 #include "MinHook.h"
@@ -28,13 +29,13 @@ namespace Blips {
 static Game::RenderObjectBlips_t RenderObjectBlips_o = nullptr;
 static Game::ObjectEnumProc_t ObjectEnumProc_o = nullptr;
 static Game::ClntObjMgrEnumVisibleObjects_t ClntObjMgrEnumVisibleObjects_o = nullptr;
-static void *MinimapRender_PartyListing_o = nullptr;
-static void *OnLayerTrackUpdate_ChangedGate_o = nullptr;
-static void *OnLayerTrackUpdate_PreShowGate_o = nullptr;
-static void *OnLayerTrackUpdate_AppendToTooltipBuffer_o = nullptr;
+static void* MinimapRender_PartyListing_o = nullptr;
+static void* OnLayerTrackUpdate_ChangedGate_o = nullptr;
+static void* OnLayerTrackUpdate_PreShowGate_o = nullptr;
+static void* OnLayerTrackUpdate_AppendToTooltipBuffer_o = nullptr;
 
 struct Blip {
-    Game::HTEXTURE__ *texture;
+    Game::HTEXTURE__* texture;
     float scale;
 };
 
@@ -60,7 +61,7 @@ struct BlipHoverState {
 };
 
 static bool g_hooksInstalled = false;
-static std::unordered_map<std::string, Game::HTEXTURE__ *> g_textureCache;
+static std::unordered_map<std::string, Game::HTEXTURE__*> g_textureCache;
 static std::unordered_map<uint64_t, Blip> g_trackedUnitBlips;
 static std::unordered_map<uint32_t, Blip> g_trackedUnitFlagsBlips;
 static std::unordered_map<uint32_t, Blip> g_trackedGameObjectTypesBlips;
@@ -75,7 +76,8 @@ static const std::unordered_map<std::string, uint32_t> g_stringToFlag = {
     {"repair", Game::UNIT_NPC_FLAG_REPAIR},
     {"summoning ritual unit", Game::UNIT_NPC_FLAG_SUMMONING_RITUAL},
     {"trainer", Game::UNIT_NPC_FLAG_TRAINER},
-    {"vendor", Game::UNIT_NPC_FLAG_VENDOR}};
+    {"vendor", Game::UNIT_NPC_FLAG_VENDOR}
+};
 
 static const std::unordered_map<std::string, uint32_t> g_stringToGameObjectType = {
     {"brainwashing", Game::GAMEOBJECT_TYPE_QUESTGIVER}, // Will be further filtered
@@ -83,10 +85,9 @@ static const std::unordered_map<std::string, uint32_t> g_stringToGameObjectType 
     {"summoning ritual object", Game::GAMEOBJECT_TYPE_SUMMONING_RITUAL},
 };
 
-static void TrackObject(Game::MINIMAPINFO *info, Game::CGObject_C *objectptr, uint64_t guid,
-                        Blip blip) {
-    Game::C2Vector minimapPos;
-    Game::C3Vector unitPos;
+static void TrackObject(Game::MINIMAPINFO* info, Game::CGObject_C* objectptr, uint64_t guid, Blip blip) {
+    Game::C2Vector minimapPos{};
+    Game::C3Vector unitPos{};
 
     uint32_t wmoID = 0;
     uint32_t mapObjID = 0;
@@ -94,25 +95,26 @@ static void TrackObject(Game::MINIMAPINFO *info, Game::CGObject_C *objectptr, ui
     Game::CWorld_QueryMapObjIDs(objectptr->m_worldData, &wmoID, &mapObjID, &groupNum);
 
     // Hide outside blip when inside, replicating original function
-    if (info->wmoID && (wmoID != info->wmoID || mapObjID != info->mapObjID))
+    if ((info->wmoID != 0U) && (wmoID != info->wmoID || mapObjID != info->mapObjID)) {
         return;
+    }
 
     objectptr->vftable->GetPosition(objectptr, &unitPos);
-    float unkScale = info->minimapFrame->FrameScriptPart.vftable->GetUnkScale(
-        &info->minimapFrame->FrameScriptPart);
+    float const unkScale = info->minimapFrame->FrameScriptPart.vftable->GetUnkScale(&info->minimapFrame->FrameScriptPart);
 
-    Game::WorldPosToMinimapFrameCoords(&minimapPos, nullptr, info->currentPos, info->radius,
-                                       unitPos.x, unitPos.y, info->layoutScale, unkScale);
+    Game::WorldPosToMinimapFrameCoords(
+        &minimapPos, nullptr, info->currentPos, info->radius, unitPos.x, unitPos.y, info->layoutScale, unkScale
+    );
 
     g_trackedObjectsData.push_back(
-        {guid, minimapPos, wmoID != info->wmoID, objectptr->vftable->GetName(objectptr), blip});
+        {guid, minimapPos, wmoID != info->wmoID, objectptr->vftable->GetName(objectptr), blip}
+    );
 }
 
-static bool CheckObject(Game::MINIMAPINFO *info, uint64_t guid) {
+static auto CheckObject(Game::MINIMAPINFO* info, uint64_t guid) -> bool {
     const auto unitIt = g_trackedUnitBlips.find(guid);
     if (unitIt != g_trackedUnitBlips.end()) {
-        Game::CGObject_C *unitptr =
-            Game::ClntObjMgrObjectPtr(Game::TYPE_MASK::TYPEMASK_UNIT, nullptr, guid, 0);
+        Game::CGObject_C* unitptr = Game::ClntObjMgrObjectPtr(Game::TYPE_MASK::TYPEMASK_UNIT, nullptr, guid, 0);
         if (unitptr != nullptr) {
             TrackObject(info, unitptr, guid, unitIt->second);
             return true;
@@ -127,21 +129,23 @@ static bool CheckObject(Game::MINIMAPINFO *info, uint64_t guid) {
     if (!g_trackedGameObjectTypesBlips.empty()) {
         typemask = typemask | Game::TYPE_MASK::TYPEMASK_GAMEOBJECT;
     }
-    if (typemask == 0)
+    if (typemask == 0) {
         return false;
+    }
 
-    Game::CGObject_C *objptr = Game::ClntObjMgrObjectPtr(typemask, nullptr, guid, 0);
-    if (objptr == nullptr)
+    Game::CGObject_C* objptr = Game::ClntObjMgrObjectPtr(typemask, nullptr, guid, 0);
+    if (objptr == nullptr) {
         return false;
+    }
 
     if (objptr->m_objectType == Game::OBJECT_TYPE::UNIT) {
-        const auto *unitData = reinterpret_cast<Game::CGUnitData *>(objptr->m_data);
+        const auto* unitData = reinterpret_cast<Game::CGUnitData*>(objptr->m_data);
         uint32_t matchedFlag = 0;
-        Blip blip;
+        Blip blip{};
 
         // Units can have multiple flags (ex: repair and vendor), we find the strongest one
-        for (const auto &[flag, tracked] : g_trackedUnitFlagsBlips) {
-            if (unitData->m_npcFlags & flag) {
+        for (const auto& [flag, tracked] : g_trackedUnitFlagsBlips) {
+            if ((unitData->m_npcFlags & flag) != 0U) {
                 if (flag > matchedFlag) {
                     matchedFlag = flag;
                     blip = tracked;
@@ -153,7 +157,7 @@ static bool CheckObject(Game::MINIMAPINFO *info, uint64_t guid) {
             return true;
         }
     } else if (objptr->m_objectType == Game::OBJECT_TYPE::GAMEOBJECT) {
-        const auto *gameObjectData = reinterpret_cast<Game::CGGameObjectData *>(objptr->m_data);
+        const auto* gameObjectData = reinterpret_cast<Game::CGGameObjectData*>(objptr->m_data);
 
         const auto it = g_trackedGameObjectTypesBlips.find(gameObjectData->m_type);
         if (it != g_trackedGameObjectTypesBlips.end()) {
@@ -168,25 +172,26 @@ static bool CheckObject(Game::MINIMAPINFO *info, uint64_t guid) {
     return false;
 }
 
-static void DrawTrackedBlips(Game::CGMinimapFrame *minimapPtr, Game::DNInfo *dnInfo) {
+static void DrawTrackedBlips(Game::CGMinimapFrame* minimapPtr, Game::DNInfo* dnInfo) {
     // We are gathering the position in ObjectEnumProc because it is rate limited to avoid spamming
     // expensive calls. To do it in RenderObjectBlips, we can use DNInfo for current position,
     // MinimapGetWorldRadius() for world radius and minimapPtr +0x7C for layout scale.
-    for (const auto &objData : g_trackedObjectsData) {
-        Game::DrawMinimapTexture(objData.blip.texture, objData.minimapPos, objData.blip.scale,
-                                 objData.isInDifferentArea);
+    for (const auto& objData : g_trackedObjectsData) {
+        Game::DrawMinimapTexture(
+            objData.blip.texture, objData.minimapPos, objData.blip.scale, objData.isInDifferentArea
+        );
     }
 }
 
-static bool IsUnitTracked(uint64_t guid) {
-    return g_trackedUnitBlips.find(guid) != g_trackedUnitBlips.end();
+static auto IsUnitTracked(uint64_t guid) -> bool {
+    return g_trackedUnitBlips.contains(guid);
 }
 
 static void UpdateCustomHover(Game::C2Vector mouse, Game::C2Vector offset) {
     std::vector<BlipHoverEntry> now;
     now.reserve(g_trackedObjectsData.size());
 
-    for (const auto &objData : g_trackedObjectsData) {
+    for (const auto& objData : g_trackedObjectsData) {
         const float half = *Game::BLIP_HALF * objData.blip.scale;
         const float px = objData.minimapPos.x + offset.x;
         const float py = objData.minimapPos.y + offset.y;
@@ -196,15 +201,15 @@ static void UpdateCustomHover(Game::C2Vector mouse, Game::C2Vector offset) {
         }
     }
 
-    std::sort(now.begin(), now.end(), [](const auto &a, const auto &b) { return a.guid < b.guid; });
+    std::ranges::sort(now, [](const auto& a, const auto& b) { return a.guid < b.guid; });
 
     // FNV-1a hash
-    uint64_t h = 14695981039346656037ULL;
+    uint64_t h = 14'695'981'039'346'656'037ULL;
     auto mix = [&](uint64_t v) {
         h ^= v;
-        h *= 1099511628211ULL;
+        h *= 1'099'511'628'211ULL;
     };
-    for (const auto &hit : now) {
+    for (const auto& hit : now) {
         mix(hit.guid);
         mix(hit.gray ? 1ULL : 0ULL);
         mix(std::hash<std::string_view>{}(hit.name));
@@ -219,11 +224,12 @@ static void UpdateCustomHover(Game::C2Vector mouse, Game::C2Vector offset) {
     }
 }
 
-static void WriteToMinimapTooltip(char *tooltipText) {
-    if (g_blipHoverState.hits.empty())
+static void WriteToMinimapTooltip(char* tooltipText) {
+    if (g_blipHoverState.hits.empty()) {
         return;
+    }
 
-    for (const auto &hit : g_blipHoverState.hits) {
+    for (const auto& hit : g_blipHoverState.hits) {
         if (hit.gray) {
             Game::SStrPack(tooltipText, "|cffb0b0b0", 0x400);
             Game::SStrPack(tooltipText, hit.name.c_str(), 0x400);
@@ -235,23 +241,23 @@ static void WriteToMinimapTooltip(char *tooltipText) {
     }
 }
 
-static int __fastcall
-ClntObjMgrEnumVisibleObjects_h(Game::ClntObjMgrEnumVisibleObjectsCallback_t callback,
-                               void *context) {
+static int __fastcall ClntObjMgrEnumVisibleObjects_h(
+    Game::ClntObjMgrEnumVisibleObjectsCallback_t callback, void* context
+) {
     if (reinterpret_cast<uintptr_t>(callback) == Offsets::FUN_OBJECT_ENUM_PROC) {
         g_trackedObjectsData.clear();
     }
-    return ClntObjMgrEnumVisibleObjects_o(callback, context);
+    return static_cast<int>(ClntObjMgrEnumVisibleObjects_o(callback, context));
 }
 
-static int __fastcall ObjectEnumProc_h(Game::MINIMAPINFO *info, uint64_t guid) {
-    if (!CheckObject(info, guid))
+static int __fastcall ObjectEnumProc_h(Game::MINIMAPINFO* info, uint64_t guid) {
+    if (!CheckObject(info, guid)) {
         ObjectEnumProc_o(info, guid);
+    }
     return 1; // The original function always seems to return 1
 }
 
-static void __fastcall RenderObjectBlips_h(Game::CGMinimapFrame *thisptr, void * /*edx*/,
-                                           Game::DNInfo *dnInfo) {
+static void __fastcall RenderObjectBlips_h(Game::CGMinimapFrame* thisptr, void* /*edx*/, Game::DNInfo* dnInfo) {
     RenderObjectBlips_o(thisptr, dnInfo);
     DrawTrackedBlips(thisptr, dnInfo);
 }
@@ -336,10 +342,9 @@ __attribute__((naked)) static void MinimapRender_PartyListing_h() {
         "1:\n\t"
         "popad\n\t"
         "jmp %P2\n\t"
-        ".att_syntax\n\t"
-        :: "i"(IsUnitTracked),
-           "m"(MinimapRender_PartyListing_o),
-           "i"(minimapSkipPartyUnitAddress)
+        ".att_syntax\n\t" ::"i"(IsUnitTracked),
+        "m"(MinimapRender_PartyListing_o),
+        "i"(minimapSkipPartyUnitAddress)
     );
 }
 
@@ -359,10 +364,9 @@ __attribute__((naked)) static void OnLayerTrackUpdate_ChangedGate_h() {
         "je 1f\n\t"
         "mov ecx, 1\n\t"
         "1: jmp dword ptr [%2]\n\t"
-        ".att_syntax\n\t"
-        :: "i"(UpdateCustomHover),
-           "m"(g_blipHoverState.changed),
-           "m"(OnLayerTrackUpdate_ChangedGate_o)
+        ".att_syntax\n\t" ::"i"(UpdateCustomHover),
+        "m"(g_blipHoverState.changed),
+        "m"(OnLayerTrackUpdate_ChangedGate_o)
     );
 }
 
@@ -373,9 +377,8 @@ __attribute__((naked)) static void OnLayerTrackUpdate_PreShowGate_h() {
         "je 1f\n\t"
         "mov edx, 1\n\t"
         "1: jmp dword ptr [%1]\n\t"
-        ".att_syntax\n\t"
-        :: "m"(g_blipHoverState.changed),
-           "m"(OnLayerTrackUpdate_PreShowGate_o)
+        ".att_syntax\n\t" ::"m"(g_blipHoverState.changed),
+        "m"(OnLayerTrackUpdate_PreShowGate_o)
     );
 }
 
@@ -389,64 +392,74 @@ __attribute__((naked)) static void OnLayerTrackUpdate_AppendToTooltipBuffer_h() 
         "add esp, 4\n\t"
         "popad\n\t"
         "jmp dword ptr [%1]\n\t"
-        ".att_syntax\n\t"
-        :: "i"(WriteToMinimapTooltip),
-           "m"(OnLayerTrackUpdate_AppendToTooltipBuffer_o)
+        ".att_syntax\n\t" ::"i"(WriteToMinimapTooltip),
+        "m"(OnLayerTrackUpdate_AppendToTooltipBuffer_o)
     );
 }
 #endif
 
-static bool InstallHooks() {
-    if (g_hooksInstalled)
+static auto InstallHooks() -> bool {
+    if (g_hooksInstalled) {
         return TRUE;
+    }
 
-    HOOK_FUNCTION(Offsets::FUN_CLNT_OBJ_MGR_ENUM_VISIBLE_OBJECTS, ClntObjMgrEnumVisibleObjects_h,
-                  ClntObjMgrEnumVisibleObjects_o);
+    HOOK_FUNCTION(
+        Offsets::FUN_CLNT_OBJ_MGR_ENUM_VISIBLE_OBJECTS, ClntObjMgrEnumVisibleObjects_h, ClntObjMgrEnumVisibleObjects_o
+    );
     HOOK_FUNCTION(Offsets::FUN_OBJECT_ENUM_PROC, ObjectEnumProc_h, ObjectEnumProc_o);
     HOOK_FUNCTION(Offsets::FUN_RENDER_OBJECT_BLIP, RenderObjectBlips_h, RenderObjectBlips_o);
-    HOOK_FUNCTION(Offsets::PATCH_MINIMAP_RENDER_PARTY_LISTING, MinimapRender_PartyListing_h,
-                  MinimapRender_PartyListing_o);
-    HOOK_FUNCTION(Offsets::PATCH_MINIMAP_TRACK_UPDATE_CHANGED_GATE,
-                  OnLayerTrackUpdate_ChangedGate_h, OnLayerTrackUpdate_ChangedGate_o);
-    HOOK_FUNCTION(Offsets::PATCH_MINIMAP_TRACK_UPDATE_PRE_SHOW_GATE,
-                  OnLayerTrackUpdate_PreShowGate_h, OnLayerTrackUpdate_PreShowGate_o);
-    HOOK_FUNCTION(Offsets::PATCH_MINIMAP_TRACK_UPDATE_APPEND_TO_TOOLTIP_BUFFER,
-                  OnLayerTrackUpdate_AppendToTooltipBuffer_h,
-                  OnLayerTrackUpdate_AppendToTooltipBuffer_o);
+    HOOK_FUNCTION(
+        Offsets::PATCH_MINIMAP_RENDER_PARTY_LISTING, MinimapRender_PartyListing_h, MinimapRender_PartyListing_o
+    );
+    HOOK_FUNCTION(
+        Offsets::PATCH_MINIMAP_TRACK_UPDATE_CHANGED_GATE,
+        OnLayerTrackUpdate_ChangedGate_h,
+        OnLayerTrackUpdate_ChangedGate_o
+    );
+    HOOK_FUNCTION(
+        Offsets::PATCH_MINIMAP_TRACK_UPDATE_PRE_SHOW_GATE,
+        OnLayerTrackUpdate_PreShowGate_h,
+        OnLayerTrackUpdate_PreShowGate_o
+    );
+    HOOK_FUNCTION(
+        Offsets::PATCH_MINIMAP_TRACK_UPDATE_APPEND_TO_TOOLTIP_BUFFER,
+        OnLayerTrackUpdate_AppendToTooltipBuffer_h,
+        OnLayerTrackUpdate_AppendToTooltipBuffer_o
+    );
 
     g_hooksInstalled = true;
     return TRUE;
 }
 
-static bool UninstallHooks() {
-    if (!g_hooksInstalled)
+static auto UninstallHooks() -> bool {
+    if (!g_hooksInstalled) {
         return TRUE;
+    }
 
     UNHOOK_FUNCTION(Offsets::FUN_CLNT_OBJ_MGR_ENUM_VISIBLE_OBJECTS, ClntObjMgrEnumVisibleObjects_o);
     UNHOOK_FUNCTION(Offsets::FUN_OBJECT_ENUM_PROC, ObjectEnumProc_o);
     UNHOOK_FUNCTION(Offsets::FUN_RENDER_OBJECT_BLIP, RenderObjectBlips_o);
     UNHOOK_FUNCTION(Offsets::PATCH_MINIMAP_RENDER_PARTY_LISTING, MinimapRender_PartyListing_o);
-    UNHOOK_FUNCTION(Offsets::PATCH_MINIMAP_TRACK_UPDATE_CHANGED_GATE,
-                    OnLayerTrackUpdate_ChangedGate_o);
-    UNHOOK_FUNCTION(Offsets::PATCH_MINIMAP_TRACK_UPDATE_PRE_SHOW_GATE,
-                    OnLayerTrackUpdate_PreShowGate_o);
-    UNHOOK_FUNCTION(Offsets::PATCH_MINIMAP_TRACK_UPDATE_APPEND_TO_TOOLTIP_BUFFER,
+    UNHOOK_FUNCTION(Offsets::PATCH_MINIMAP_TRACK_UPDATE_CHANGED_GATE, OnLayerTrackUpdate_ChangedGate_o);
+    UNHOOK_FUNCTION(Offsets::PATCH_MINIMAP_TRACK_UPDATE_PRE_SHOW_GATE, OnLayerTrackUpdate_PreShowGate_o);
+    UNHOOK_FUNCTION(
+        Offsets::PATCH_MINIMAP_TRACK_UPDATE_APPEND_TO_TOOLTIP_BUFFER,
 
-                    OnLayerTrackUpdate_AppendToTooltipBuffer_o);
+        OnLayerTrackUpdate_AppendToTooltipBuffer_o
+    );
 
     g_hooksInstalled = false;
     return TRUE;
 }
 
-static Game::HTEXTURE__ *LoadTextureCached(const std::string &texturePathLower) {
+static auto LoadTextureCached(const std::string& texturePathLower) -> Game::HTEXTURE__* {
     if (const auto it = g_textureCache.find(texturePathLower); it != g_textureCache.end()) {
         return it->second;
     }
 
-    Game::CGxTexFlags texFlags(Game::EGxTexFilter::GxTex_Nearest, 0, 0, 0, 0, 0, 0, 1);
+    Game::CGxTexFlags const texFlags(Game::EGxTexFilter::GxTex_Nearest, 0, 0, 0, 0, 0, 0, 1);
     Game::CStatus status;
-    Game::HTEXTURE__ *texture =
-        Game::TextureCreate(texturePathLower.c_str(), &status, texFlags, 0, 1);
+    Game::HTEXTURE__* texture = Game::TextureCreate(texturePathLower.c_str(), &status, texFlags, 0, 1);
     if (!status.ok()) {
         return nullptr;
     }
@@ -454,13 +467,13 @@ static Game::HTEXTURE__ *LoadTextureCached(const std::string &texturePathLower) 
     return texture;
 }
 
-static int __fastcall Script_SetUnitBlip(void *L) {
+static int __fastcall Script_SetUnitBlip(void* L) {
     if (!Game::Lua::IsString(L, 1)) {
         Game::Lua::Error(L, "Usage: SetUnitBlip(unit [, texture [, scale]])");
         return 0;
     }
 
-    const auto *unitToken = Game::Lua::ToString(L, 1);
+    const auto* unitToken = Game::Lua::ToString(L, 1);
     const uint64_t unitGUID = Game::GetGUIDFromName(unitToken);
 
     if (unitGUID == 0) {
@@ -473,26 +486,28 @@ static int __fastcall Script_SetUnitBlip(void *L) {
         return 0;
     }
 
-    auto *unitptr = reinterpret_cast<Game::CGUnit_C *>(
-        Game::ClntObjMgrObjectPtr(Game::TYPE_MASK::TYPEMASK_UNIT, nullptr, unitGUID, 0));
+    auto* unitptr = reinterpret_cast<Game::CGUnit_C*>(
+        Game::ClntObjMgrObjectPtr(Game::TYPE_MASK::TYPEMASK_UNIT, nullptr, unitGUID, 0)
+    );
 
     if (unitptr == nullptr) {
         Game::Lua::Error(L, "Unit not found.");
         return 0;
     }
 
-    auto *playerptr = reinterpret_cast<Game::CGUnit_C *>(Game::ClntObjMgrObjectPtr(
-        Game::TYPE_MASK::TYPEMASK_PLAYER, nullptr, Game::ClntObjMgrGetActivePlayer(), 0));
+    auto* playerptr = reinterpret_cast<Game::CGUnit_C*>(
+        Game::ClntObjMgrObjectPtr(Game::TYPE_MASK::TYPEMASK_PLAYER, nullptr, Game::ClntObjMgrGetActivePlayer(), 0)
+    );
     if (!Game::CGUnit_C_CanAssist(playerptr, unitptr)) {
         Game::Lua::Error(L, "Unit is not friendly.");
         return 0;
     }
 
     std::string texturePath = Game::Lua::ToString(L, 2);
-    std::transform(texturePath.begin(), texturePath.end(), texturePath.begin(), ::tolower);
+    std::ranges::transform(texturePath, texturePath.begin(), ::tolower);
 
-    Game::HTEXTURE__ *texture = LoadTextureCached(texturePath);
-    if (!texture) {
+    Game::HTEXTURE__* texture = LoadTextureCached(texturePath);
+    if (texture == nullptr) {
         Game::Lua::Error(L, "Couldn't load texture.");
         return 0;
     }
@@ -504,19 +519,19 @@ static int __fastcall Script_SetUnitBlip(void *L) {
         scale = static_cast<float>(Game::Lua::ToNumber(L, 3));
     }
 
-    g_trackedUnitBlips[unitGUID] = {texture, scale};
+    g_trackedUnitBlips[unitGUID] = {.texture=texture, .scale=scale};
 
     return 0;
 }
 
-static int __fastcall Script_SetObjectTypeBlip(void *L) {
+static int __fastcall Script_SetObjectTypeBlip(void* L) {
     if (!Game::Lua::IsString(L, 1)) {
         Game::Lua::Error(L, "Usage: SetObjectTypeBlip(type [, texture [, scale]])");
         return 0;
     }
 
     std::string typeName = Game::Lua::ToString(L, 1);
-    std::transform(typeName.begin(), typeName.end(), typeName.begin(), ::tolower);
+    std::ranges::transform(typeName, typeName.begin(), ::tolower);
 
     if (!Game::Lua::IsString(L, 2)) {
         const auto itFlag = g_stringToFlag.find(typeName);
@@ -531,17 +546,20 @@ static int __fastcall Script_SetObjectTypeBlip(void *L) {
             return 0;
         }
 
-        Game::Lua::Error(L, "Unknown object type. Supported types: Auctioneer, Banker, "
-                            "Brainwashing, Flight Master, Innkeeper, Mailbox, Repair, Summoning "
-                            "Ritual Object, Summoning Ritual Unit, Trainer, Vendor.");
+        Game::Lua::Error(
+            L,
+            "Unknown object type. Supported types: Auctioneer, Banker, "
+            "Brainwashing, Flight Master, Innkeeper, Mailbox, Repair, Summoning "
+            "Ritual Object, Summoning Ritual Unit, Trainer, Vendor."
+        );
         return 0;
     }
 
     std::string texturePath = Game::Lua::ToString(L, 2);
-    std::transform(texturePath.begin(), texturePath.end(), texturePath.begin(), ::tolower);
+    std::ranges::transform(texturePath, texturePath.begin(), ::tolower);
 
-    Game::HTEXTURE__ *texture = LoadTextureCached(texturePath);
-    if (!texture) {
+    Game::HTEXTURE__* texture = LoadTextureCached(texturePath);
+    if (texture == nullptr) {
         Game::Lua::Error(L, "Couldn't load texture.");
         return 0;
     }
@@ -551,7 +569,7 @@ static int __fastcall Script_SetObjectTypeBlip(void *L) {
         scale = static_cast<float>(Game::Lua::ToNumber(L, 3));
     }
 
-    Blip blip = {texture, scale};
+    Blip const blip = {.texture=texture, .scale=scale};
 
     const auto itFlag = g_stringToFlag.find(typeName);
     if (itFlag != g_stringToFlag.end()) {
@@ -567,17 +585,18 @@ static int __fastcall Script_SetObjectTypeBlip(void *L) {
         return 0;
     }
 
-    Game::Lua::Error(L, "Unknown object type. Supported types: Auctioneer, Banker, Brainwashing, "
-                        "Flight Master, Innkeeper, Mailbox, Repair, Summoning Ritual Object, "
-                        "Summoning Ritual Unit, Trainer, Vendor.");
+    Game::Lua::Error(
+        L,
+        "Unknown object type. Supported types: Auctioneer, Banker, Brainwashing, "
+        "Flight Master, Innkeeper, Mailbox, Repair, Summoning Ritual Object, "
+        "Summoning Ritual Unit, Trainer, Vendor."
+    );
     return 0;
 }
 
 void RegisterLuaFunctions() {
-    Game::FrameScript_RegisterFunction("SetUnitBlip",
-                                       reinterpret_cast<uintptr_t>(&Script_SetUnitBlip));
-    Game::FrameScript_RegisterFunction("SetObjectTypeBlip",
-                                       reinterpret_cast<uintptr_t>(&Script_SetObjectTypeBlip));
+    Game::FrameScript_RegisterFunction("SetUnitBlip", reinterpret_cast<uintptr_t>(&Script_SetUnitBlip));
+    Game::FrameScript_RegisterFunction("SetObjectTypeBlip", reinterpret_cast<uintptr_t>(&Script_SetObjectTypeBlip));
 }
 
 void Reset() {

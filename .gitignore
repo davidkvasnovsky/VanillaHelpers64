@@ -44,6 +44,8 @@
 *.dwo
 build/
 build-server/
+build-tidy/
+build-tidy-dll/
 TextureServer64/build/
 *.obj
 *.o

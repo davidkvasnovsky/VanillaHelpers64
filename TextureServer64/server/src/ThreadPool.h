@@ -3,8 +3,8 @@
 // Part of the TextureServer64 server component.
 // Requirements: C++17 standard library only (no platform-specific APIs).
 
-#include <cstdint>
 #include <condition_variable>
+#include <cstdint>
 #include <functional>
 #include <future>
 #include <mutex>
@@ -26,18 +26,17 @@ public:
 
     // Non-copyable, non-movable.
     ThreadPool(const ThreadPool&) = delete;
-    ThreadPool& operator=(const ThreadPool&) = delete;
+    auto operator=(const ThreadPool&) -> ThreadPool& = delete;
     ThreadPool(ThreadPool&&) = delete;
-    ThreadPool& operator=(ThreadPool&&) = delete;
+    auto operator=(ThreadPool&&) -> ThreadPool& = delete;
 
     // Submit a fire-and-forget task.
     // priority: 0 = highest, 255 = lowest. Default 128 (normal).
     void Submit(std::function<void()> task, uint8_t priority = 128);
 
     // Submit a task that returns a value, accessible via std::future.
-    template<typename F>
-    auto SubmitWithResult(F&& func, uint8_t priority = 128)
-        -> std::future<decltype(func())>;
+    template <typename F>
+    auto SubmitWithResult(F&& func, uint8_t priority = 128) -> std::future<decltype(func())>;
 
     // Block until all submitted tasks have finished executing.
     void WaitIdle();
@@ -50,45 +49,44 @@ public:
     void Resume();
 
     // Number of worker threads.
-    uint32_t WorkerCount() const;
+    auto WorkerCount() const -> uint32_t;
 
 private:
     // Internal prioritised task wrapper.
     struct PriTask {
-        uint8_t                priority;  // 0 = highest
-        uint64_t               sequence;  // monotonic, for FIFO tiebreak
-        std::function<void()>  func;
+        uint8_t priority;  // 0 = highest
+        uint64_t sequence; // monotonic, for FIFO tiebreak
+        std::function<void()> func;
 
         // For std::priority_queue (max-heap), we invert the comparison
         // so that *lower* priority values and *lower* sequence numbers
         // are dequeued first.
-        bool operator<(const PriTask& rhs) const {
-            if (priority != rhs.priority)
-                return priority > rhs.priority;   // lower value = higher pri
-            return sequence > rhs.sequence;        // earlier = higher pri
+        auto operator<(const PriTask& rhs) const -> bool {
+            if (priority != rhs.priority) {
+                return priority > rhs.priority; // lower value = higher pri
+            }
+            return sequence > rhs.sequence; // earlier = higher pri
         }
     };
 
     void WorkerMain();
 
-    std::vector<std::thread>                  workers_;
-    std::priority_queue<PriTask>              queue_;
-    mutable std::mutex                        mutex_;
-    std::condition_variable                   cv_work_;    // workers wait here
-    std::condition_variable                   cv_idle_;    // WaitIdle waits here
+    std::vector<std::thread> workers_;
+    std::priority_queue<PriTask> queue_;
+    mutable std::mutex mutex_;
+    std::condition_variable cv_work_; // workers wait here
+    std::condition_variable cv_idle_; // WaitIdle waits here
 
-    uint64_t sequence_  = 0;       // monotonically increasing task counter
-    uint32_t in_flight_ = 0;       // tasks currently being executed
-    bool     shutdown_  = false;
-    bool     paused_    = false;
+    uint64_t sequence_ = 0;  // monotonically increasing task counter
+    uint32_t in_flight_ = 0; // tasks currently being executed
+    bool shutdown_ = false;
+    bool paused_ = false;
 };
 
 // ── Template implementation ────────────────────────────────────────────────
 
-template<typename F>
-auto ThreadPool::SubmitWithResult(F&& func, uint8_t priority)
-    -> std::future<decltype(func())>
-{
+template <typename F>
+auto ThreadPool::SubmitWithResult(F&& func, uint8_t priority) -> std::future<decltype(func())> {
     using ReturnType = decltype(func());
 
     auto promise = std::make_shared<std::promise<ReturnType>>();
@@ -107,7 +105,8 @@ auto ThreadPool::SubmitWithResult(F&& func, uint8_t priority)
                 p->set_exception(std::current_exception());
             }
         },
-        priority);
+        priority
+    );
 
     return future;
 }

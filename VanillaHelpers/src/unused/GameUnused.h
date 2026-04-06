@@ -30,7 +30,7 @@ struct MinimapObject {
 struct MinimapObjectArray {
     uint32_t capacity;
     uint32_t count;
-    MinimapObject *data;
+    MinimapObject* data;
     uint32_t unk;
 };
 
@@ -41,27 +41,27 @@ struct MinimapTypeInfoEntry {
 };
 
 // Used in the original RenderObjectBlips
-using atexit_t = int(__cdecl *)(void(__cdecl *)());
+using atexit_t = int(__cdecl*)(void(__cdecl*)());
 // Used to get the world radius given to WorldPosToMinimapFrameCoords, but it's already in the
 // MINIMAPINFO passed to RenderObjectBlips
-using MinimapGetWorldRadius_t = float(__cdecl *)();
+using MinimapGetWorldRadius_t = float(__cdecl*)();
 // Used in the original RenderObjectBlips
 extern const atexit_t atexit;
 // Used to get the world radius given to WorldPosToMinimapFrameCoords, but it's already in the
 // MINIMAPINFO passed to RenderObjectBlips
 extern const MinimapGetWorldRadius_t MinimapGetWorldRadius;
 // Was used to reinitialize blips state, but was called during all loading screens
-using CGGameUI_LeaveWorld_t = void(__fastcall *)();
+using CGGameUI_LeaveWorld_t = void(__fastcall*)();
 
 // Used in the original RenderObjectBlips
-extern uint8_t &s_renderObjectBlipsInitialized;
+extern uint8_t& s_renderObjectBlipsInitialized;
 // Used by the original RenderObjectBlips, this is the default atlas texture (ObjectIcons.blp)
-extern HTEXTURE__ *&s_blipTexture;
+extern HTEXTURE__*& s_blipTexture;
 // Contains the data used to draw the blips rendered in RenderObjectBlips
-extern MinimapObjectArray *s_minimapObjects;
+extern MinimapObjectArray* s_minimapObjects;
 // Contains the texture coords of the original blip atlas texture (ObjectIcons.blp)
-extern TexCoord *s_iconCoords;
+extern TexCoord* s_iconCoords;
 // Contains the scale of each of the original blips
-extern MinimapTypeInfoEntry *s_minimapTypeInfo;
+extern MinimapTypeInfoEntry* s_minimapTypeInfo;
 
 } // namespace Game

@@ -1,0 +1,3 @@
+VanillaHelpers/external/**
+TextureServer64/server/src/stb_image.h
+build*/**

@@ -1,0 +1,87 @@
+BasedOnStyle: LLVM
+Standard: Latest
+ColumnLimit: 120
+IndentWidth: 4
+UseTab: Never
+LineEnding: LF
+MaxEmptyLinesToKeep: 1
+
+# Braces & blocks
+BreakBeforeBraces: Attach
+InsertBraces: true
+RemoveSemicolon: true
+InsertNewlineAtEOF: true
+
+# Pointers & qualifiers
+DerivePointerAlignment: false
+PointerAlignment: Left
+ReferenceAlignment: Left
+QualifierAlignment: Leave
+
+# Short statements
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortLambdasOnASingleLine: Inline
+AllowShortEnumsOnASingleLine: false
+
+# Arguments & parameters
+AlignAfterOpenBracket: BlockIndent
+BinPackArguments: false
+BinPackParameters: false
+PackConstructorInitializers: NextLine
+
+# Templates, return types & attributes
+BreakTemplateDeclarations: Yes
+BreakAfterReturnType: Automatic
+BreakAfterAttributes: Always
+
+# C++20 concepts & requires
+BreakBeforeConceptDeclarations: Always
+IndentRequiresClause: true
+RequiresClausePosition: OwnLine
+RequiresExpressionIndentation: OuterScope
+
+# Includes
+SortIncludes: CaseSensitive
+IncludeBlocks: Regroup
+
+# Alignment & comments
+AlignTrailingComments:
+  Kind: Always
+  OverEmptyLines: 0
+FixNamespaceComments: true
+ReflowComments: false
+SpacesBeforeTrailingComments: 1
+
+# Namespace & access modifiers
+NamespaceIndentation: None
+CompactNamespaces: false
+AccessModifierOffset: -4
+EmptyLineAfterAccessModifier: Never
+EmptyLineBeforeAccessModifier: LogicalBlock
+
+# Switch/case & preprocessor
+IndentCaseLabels: true
+IndentPPDirectives: AfterHash
+
+# Spaces
+SpaceAfterCStyleCast: false
+SpaceBeforeParens: ControlStatements
+SpacesInParens: Never
+
+# Modern extras (clang 17-20)
+RemoveParentheses: MultipleParentheses
+BreakBinaryOperations: RespectPrecedence
+KeepEmptyLines:
+  AtStartOfBlock: false
+  AtEndOfFile: false
+  AtStartOfFile: false
+IntegerLiteralSeparator:
+  Binary: 4
+  BinaryMinDigits: 0
+  Decimal: 3
+  DecimalMinDigits: 5
+  Hex: 0
+  HexMinDigits: 0
+LambdaBodyIndentation: Signature

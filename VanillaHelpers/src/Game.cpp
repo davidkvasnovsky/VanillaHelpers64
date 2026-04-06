@@ -12,6 +12,7 @@
 // VanillaHelpers. If not, see <https://www.gnu.org/licenses/>.
 
 #include "Game.h"
+
 #include "Offsets.h"
 
 namespace Game {
@@ -61,13 +62,13 @@ CGUnit_C_UpdateDisplayInfo_t CGUnit_C_UpdateDisplayInfo = nullptr;
 DBCache_ItemStats_C_GetRecord_t DBCache_ItemStats_C_GetRecord = nullptr;
 
 // ── Data pointers (populated by Init) ─────────────────────────────────────
-C3Vector *s_blipVertices = nullptr;
-TexCoord *texCoords = nullptr;
-C3Vector *normal = nullptr;
-unsigned short *vertIndices = nullptr;
-const float *BLIP_HALF = nullptr;
-const WowClientDB<FactionTemplate> *g_factionTemplateDB = nullptr;
-void **g_itemDBCache = nullptr;
+C3Vector* s_blipVertices = nullptr;
+TexCoord* texCoords = nullptr;
+C3Vector* normal = nullptr;
+unsigned short* vertIndices = nullptr;
+const float* BLIP_HALF = nullptr;
+const WowClientDB<FactionTemplate>* g_factionTemplateDB = nullptr;
+void** g_itemDBCache = nullptr;
 
 // ── Init: bind all pointers from Offsets ──────────────────────────────────
 void Init() {
@@ -84,8 +85,7 @@ void Init() {
     Lua::SetTop = reinterpret_cast<Lua::lua_settop_t>(Offsets::LUA_SET_TOP);
     Lua::Error = reinterpret_cast<Lua::lua_error_t>(Offsets::LUA_ERROR);
 
-    FrameScript_RegisterFunction =
-        reinterpret_cast<FrameScript_RegisterFunction_t>(Offsets::FUN_REGISTER_LUA_FUNCTION);
+    FrameScript_RegisterFunction = reinterpret_cast<FrameScript_RegisterFunction_t>(Offsets::FUN_REGISTER_LUA_FUNCTION);
     GetGUIDFromName = reinterpret_cast<GetGUIDFromName_t>(Offsets::FUN_GET_GUID_FROM_NAME);
     ClntObjMgrObjectPtr = reinterpret_cast<ClntObjMgrObjectPtr_t>(Offsets::FUN_CLNT_OBJ_MGR_OBJECT_PTR);
     RenderObjectBlips = reinterpret_cast<RenderObjectBlips_t>(Offsets::FUN_RENDER_OBJECT_BLIP);
@@ -117,38 +117,45 @@ void Init() {
     DBCache_ItemStats_C_GetRecord =
         reinterpret_cast<DBCache_ItemStats_C_GetRecord_t>(Offsets::FUN_DBCACHE_ITEM_STATS_C_GET_RECORD);
 
-    s_blipVertices = reinterpret_cast<C3Vector *>(Offsets::CONST_BLIP_VERTICES);
-    texCoords = reinterpret_cast<TexCoord *>(Offsets::CONST_TEX_COORDS);
-    normal = reinterpret_cast<C3Vector *>(Offsets::CONST_NORMAL_VEC3);
-    vertIndices = reinterpret_cast<unsigned short *>(Offsets::CONST_VERT_INDICES);
-    BLIP_HALF = reinterpret_cast<const float *>(Offsets::CONST_BLIP_HALF);
-    g_factionTemplateDB =
-        reinterpret_cast<const WowClientDB<FactionTemplate> *>(Offsets::CONST_FACTION_TEMPLATE_DB);
-    g_itemDBCache = reinterpret_cast<void **>(Offsets::VAR_ITEMDB_CACHE);
+    s_blipVertices = reinterpret_cast<C3Vector*>(Offsets::CONST_BLIP_VERTICES);
+    texCoords = reinterpret_cast<TexCoord*>(Offsets::CONST_TEX_COORDS);
+    normal = reinterpret_cast<C3Vector*>(Offsets::CONST_NORMAL_VEC3);
+    vertIndices = reinterpret_cast<unsigned short*>(Offsets::CONST_VERT_INDICES);
+    BLIP_HALF = reinterpret_cast<const float*>(Offsets::CONST_BLIP_HALF);
+    g_factionTemplateDB = reinterpret_cast<const WowClientDB<FactionTemplate>*>(Offsets::CONST_FACTION_TEMPLATE_DB);
+    g_itemDBCache = reinterpret_cast<void**>(Offsets::VAR_ITEMDB_CACHE);
 }
 
 // ── CStatus ───────────────────────────────────────────────────────────────
 CStatus::CStatus()
-    : vftable(reinterpret_cast<void *>(Offsets::VFTABLE_CSTATUS)), m_unk(8),
-      m_head{&m_head, reinterpret_cast<void *>(reinterpret_cast<uintptr_t>(&m_head) | 1U)},
-      m_maxSeverity(STATUS_TYPE::STATUS_INFO) {}
+    : vftable(reinterpret_cast<void*>(Offsets::VFTABLE_CSTATUS)),
+      
+      m_head{.prevLink=&m_head, .next=reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(&m_head) | 1U)}
+      {}
 
 CStatus::~CStatus() {
     reinterpret_cast<CStatus_Destructor_t>(Offsets::FUN_CSTATUS_DESTRUCTOR)(this);
 }
 
-CGxTexFlags::CGxTexFlags(EGxTexFilter filter, uint32_t wrapU, uint32_t wrapV,
-                         uint32_t forceMipTracking, uint32_t generateMipMaps, uint32_t renderTarget,
-                         uint32_t maxAnisotropy, uint32_t unknownFlag) {
+CGxTexFlags::CGxTexFlags(
+    EGxTexFilter filter,
+    uint32_t wrapU,
+    uint32_t wrapV,
+    uint32_t forceMipTracking,
+    uint32_t generateMipMaps,
+    uint32_t renderTarget,
+    uint32_t maxAnisotropy,
+    uint32_t unknownFlag
+) {
     reinterpret_cast<CGxTexFlags_Constructor_t>(Offsets::FUN_CGX_TEX_FLAGS_CONSTRUCTOR)(
-        this, filter, wrapU, wrapV, forceMipTracking, generateMipMaps, renderTarget, maxAnisotropy,
-        unknownFlag);
+        this, filter, wrapU, wrapV, forceMipTracking, generateMipMaps, renderTarget, maxAnisotropy, unknownFlag
+    );
 }
 
-void DrawMinimapTexture(HTEXTURE__ *texture, C2Vector minimapPosition, float scale, bool gray) {
-    CImVector color = {0xFF, 0xFF, 0xFF, 0xFF}; // White
+void DrawMinimapTexture(HTEXTURE__* texture, C2Vector minimapPosition, float scale, bool gray) {
+    CImVector color = {.b=0xFF, .g=0xFF, .r=0xFF, .a=0xFF}; // White
     if (gray) {
-        color = {0xFF, 0xB0, 0xB0, 0xB0}; //  Dark Gray
+        color = {.b=0xFF, .g=0xB0, .r=0xB0, .a=0xB0}; //  Dark Gray
     }
 
     C3Vector vertices[4];
@@ -159,14 +166,16 @@ void DrawMinimapTexture(HTEXTURE__ *texture, C2Vector minimapPosition, float sca
     }
 
     CStatus status;
-    CGxTex *gxTex = TextureGetGxTex(texture, 1, &status);
-    if (!status.ok())
+    CGxTex* gxTex = TextureGetGxTex(texture, 1, &status);
+    if (!status.ok()) {
         return;
+    }
 
     GxRsSet(GxRs_Texture0, gxTex);
 
-    GxPrimLockVertexPtrs(4, vertices, 12, normal, 0, &color, 0, nullptr, 0,
-                         reinterpret_cast<C2Vector *>(texCoords), 8, nullptr, 0);
+    GxPrimLockVertexPtrs(
+        4, vertices, 12, normal, 0, &color, 0, nullptr, 0, reinterpret_cast<C2Vector*>(texCoords), 8, nullptr, 0
+    );
 
     GxPrimDrawElements(EGxPrim::GxPrim_TriangleStrip, 4, vertIndices);
 

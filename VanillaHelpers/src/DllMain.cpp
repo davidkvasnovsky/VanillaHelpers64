@@ -33,7 +33,7 @@ static HMODULE s_hModule = nullptr;
 static void __fastcall InvalidFunctionPtrCheck_h() {}
 
 static bool __fastcall InitializeGlobal_h() {
-    bool ok = InitializeGlobal_o();
+    bool const ok = InitializeGlobal_o();
     Texture::InstallCharacterSkin();
 
     // TexBridge init deferred from DllMain to here — CreateProcess and thread
@@ -47,9 +47,10 @@ static bool __fastcall InitializeGlobal_h() {
 
 static bool __fastcall FrameScript_Initialize_h() {
     FrameScript_Initialize_o();
-    const std::string luaScript =
-        "VANILLAHELPERS_VERSION=" + std::to_string(VANILLAHELPERS_VERSION_VALUE) +
-        "\nVANILLA_HELPERS_VERSION=" + std::to_string(VANILLAHELPERS_VERSION_VALUE);
+    const std::string luaScript = "VANILLAHELPERS_VERSION=" +
+                                  std::to_string(VANILLAHELPERS_VERSION_VALUE) +
+                                  "\nVANILLA_HELPERS_VERSION=" +
+                                  std::to_string(VANILLAHELPERS_VERSION_VALUE);
     Game::FrameScript_Execute(luaScript.c_str(), "VanillaHelpers.lua");
     return true;
 }
@@ -78,35 +79,40 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID lpReserved) {
         {
             char dllDir[MAX_PATH] = {};
             GetModuleFileNameA(hModule, dllDir, MAX_PATH);
-            char *lastSlash = strrchr(dllDir, '\\');
-            if (lastSlash) *(lastSlash + 1) = '\0';
+            char* lastSlash = strrchr(dllDir, '\\');
+            if (lastSlash != nullptr) {
+                *(lastSlash + 1) = '\0';
+            }
             Offsets::LoadFromFile(dllDir);
         }
         Game::Init();
 
-        if (MH_Initialize() != MH_OK)
+        if (MH_Initialize() != MH_OK) {
             return FALSE;
+        }
 
         Allocator::Initialize();
         Texture::Initialize();
 
-        auto *target = reinterpret_cast<LPVOID>(Offsets::FUN_INVALID_FUNCTION_PTR_CHECK);
-        if (MH_CreateHook(target, reinterpret_cast<LPVOID>(InvalidFunctionPtrCheck_h), nullptr) != MH_OK)
+        auto* target = reinterpret_cast<LPVOID>(Offsets::FUN_INVALID_FUNCTION_PTR_CHECK);
+        if (MH_CreateHook(target, reinterpret_cast<LPVOID>(InvalidFunctionPtrCheck_h), nullptr) != MH_OK) {
             return FALSE;
-        if (MH_EnableHook(target) != MH_OK)
+        }
+        if (MH_EnableHook(target) != MH_OK) {
             return FALSE;
+        }
 
         HOOK_FUNCTION(Offsets::FUN_INITIALIZE_GLOBAL, InitializeGlobal_h, InitializeGlobal_o);
-        HOOK_FUNCTION(Offsets::FUN_FRAME_SCRIPT_INITIALIZE, FrameScript_Initialize_h,
-                      FrameScript_Initialize_o);
-        HOOK_FUNCTION(Offsets::FUN_LOAD_SCRIPT_FUNCTIONS, LoadScriptFunctions_h,
-                      LoadScriptFunctions_o);
+        HOOK_FUNCTION(Offsets::FUN_FRAME_SCRIPT_INITIALIZE, FrameScript_Initialize_h, FrameScript_Initialize_o);
+        HOOK_FUNCTION(Offsets::FUN_LOAD_SCRIPT_FUNCTIONS, LoadScriptFunctions_h, LoadScriptFunctions_o);
         HOOK_FUNCTION(Offsets::FUN_CGGAMEUI_SHUTDOWN, CGGameUI_Shutdown_h, CGGameUI_Shutdown_o);
 
-        if (!Allocator::InstallHooks())
+        if (!Allocator::InstallHooks()) {
             return FALSE;
-        if (!Texture::InstallHooks())
+        }
+        if (!Texture::InstallHooks()) {
             return FALSE;
+        }
 
     } else if (reason == DLL_PROCESS_DETACH) {
         TexBridge::Shutdown(true);

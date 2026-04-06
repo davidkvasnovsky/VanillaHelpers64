@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.25)
 
 # ── TexClient static library (32-bit) ───────────────────────────────────
 # Linked into VanillaHelpers.dll to provide pipe client + working set.

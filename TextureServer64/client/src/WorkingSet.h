@@ -14,12 +14,12 @@ namespace TexClient {
 /// Callback invoked when a texture is evicted from the working set.
 /// @param gpu_handle  Opaque handle (e.g. IDirect3DTexture9*) to release.
 /// @param user_data   User-provided context pointer from WorkingSetConfig.
-using ReleaseCallback = void(*)(void* gpu_handle, void* user_data);
+using ReleaseCallback = void (*)(void* gpu_handle, void* user_data);
 
 struct WorkingSetConfig {
-    uint32_t        budget_mb         = 512;
-    ReleaseCallback release_fn        = nullptr;
-    void*           release_user_data = nullptr;
+    uint32_t budget_mb = 512;
+    ReleaseCallback release_fn = nullptr;
+    void* release_user_data = nullptr;
 };
 
 class WorkingSet {
@@ -47,17 +47,17 @@ public:
 private:
     struct Entry {
         std::string path;
-        void*       gpu_handle;
-        uint32_t    size_bytes;
+        void* gpu_handle;
+        uint32_t size_bytes;
     };
 
-    WorkingSetConfig                                        config_;
-    std::list<Entry>                                        order_;   // front = MRU, back = LRU
+    WorkingSetConfig config_;
+    std::list<Entry> order_; // front = MRU, back = LRU
     std::unordered_map<std::string, std::list<Entry>::iterator> map_;
-    size_t                                                  current_bytes_ = 0;
-    mutable std::mutex                                      mutex_;
+    size_t current_bytes_ = 0;
+    mutable std::mutex mutex_;
 
-    void EvictOne();  // Pop the LRU entry (back) and invoke release callback
+    void EvictOne(); // Pop the LRU entry (back) and invoke release callback
 };
 
 } // namespace TexClient

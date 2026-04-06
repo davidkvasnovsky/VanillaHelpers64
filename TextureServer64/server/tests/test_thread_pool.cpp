@@ -3,6 +3,7 @@
 // or:      g++ -std=c++17 -I../src -pthread test_thread_pool.cpp ../src/ThreadPool.cpp -o test_thread_pool
 
 #include "ThreadPool.h"
+
 #include <atomic>
 #include <chrono>
 #include <cstdio>
@@ -12,25 +13,29 @@
 
 static int g_failures = 0;
 
-#define TEST_ASSERT(cond, msg)                                             \
-    do {                                                                   \
-        if (!(cond)) {                                                     \
-            std::fprintf(stderr, "FAIL: %s  (%s:%d)\n", msg, __FILE__,    \
-                         __LINE__);                                        \
-            ++g_failures;                                                  \
-        }                                                                  \
+#define TEST_ASSERT(cond, msg)                                                                                         \
+    do {                                                                                                               \
+        if (!(cond)) {                                                                                                 \
+            std::fprintf(stderr, "FAIL: %s  (%s:%d)\n", msg, __FILE__, __LINE__);                                      \
+            ++g_failures;                                                                                              \
+        }                                                                                                              \
     } while (0)
 
-#define TEST_ASSERT_EQ(a, b, msg)                                          \
-    do {                                                                   \
-        if ((a) != (b)) {                                                  \
-            std::fprintf(stderr, "FAIL: %s  (got %llu, expected %llu)"     \
-                         "  (%s:%d)\n", msg,                               \
-                         (unsigned long long)(a),                          \
-                         (unsigned long long)(b),                          \
-                         __FILE__, __LINE__);                              \
-            ++g_failures;                                                  \
-        }                                                                  \
+#define TEST_ASSERT_EQ(a, b, msg)                                                                                      \
+    do {                                                                                                               \
+        if ((a) != (b)) {                                                                                              \
+            std::fprintf(                                                                                              \
+                stderr,                                                                                                \
+                "FAIL: %s  (got %llu, expected %llu)"                                                                  \
+                "  (%s:%d)\n",                                                                                         \
+                msg,                                                                                                   \
+                (unsigned long long)(a),                                                                               \
+                (unsigned long long)(b),                                                                               \
+                __FILE__,                                                                                              \
+                __LINE__                                                                                               \
+            );                                                                                                         \
+            ++g_failures;                                                                                              \
+        }                                                                                                              \
     } while (0)
 
 // ── test_basic_execution ───────────────────────────────────────────────
@@ -44,17 +49,14 @@ static void test_basic_execution() {
     {
         TexServer::ThreadPool pool(4);
         for (int i = 0; i < TASK_COUNT; ++i) {
-            pool.Submit([&counter] {
-                counter.fetch_add(1, std::memory_order_relaxed);
-            });
+            pool.Submit([&counter] { counter.fetch_add(1, std::memory_order_relaxed); });
         }
         pool.WaitIdle();
         TEST_ASSERT_EQ(counter.load(), TASK_COUNT, "All 100 tasks executed");
     }
 
     // After destructor, counter must still be correct.
-    TEST_ASSERT_EQ(counter.load(), TASK_COUNT,
-                   "Counter intact after pool destruction");
+    TEST_ASSERT_EQ(counter.load(), TASK_COUNT, "Counter intact after pool destruction");
 }
 
 // ── test_future_result ─────────────────────────────────────────────────
@@ -64,23 +66,19 @@ static void test_future_result() {
 
     TexServer::ThreadPool pool(2);
 
-    auto fut = pool.SubmitWithResult([] {
-        return 6 * 7;
-    });
+    auto fut = pool.SubmitWithResult([] { return 6 * 7; });
 
-    int result = fut.get();
+    int const result = fut.get();
     TEST_ASSERT_EQ(result, 42, "Future returns correct value");
 
     // Also test void-returning SubmitWithResult.
     auto vfut = pool.SubmitWithResult([] {
         // no-op, just testing void specialisation
     });
-    vfut.get();  // should not throw
+    vfut.get(); // should not throw
 
     // Test exception propagation.
-    auto efut = pool.SubmitWithResult([]() -> int {
-        throw std::runtime_error("test error");
-    });
+    auto efut = pool.SubmitWithResult([]() -> int { throw std::runtime_error("test error"); });
 
     bool caught = false;
     try {
@@ -106,35 +104,47 @@ static void test_priority_ordering() {
     // Enqueue tasks with varying priorities.
     // priority 255 = lowest, 0 = highest, 128 = medium.
     // We submit in order: low, medium, high, very-high.
-    pool.Submit([&] {
-        std::lock_guard<std::mutex> lk(order_mutex);
-        execution_order.push_back(255);
-    }, 255);
+    pool.Submit(
+        [&] {
+            std::lock_guard<std::mutex> const lk(order_mutex);
+            execution_order.push_back(255);
+        },
+        255
+    );
 
-    pool.Submit([&] {
-        std::lock_guard<std::mutex> lk(order_mutex);
-        execution_order.push_back(128);
-    }, 128);
+    pool.Submit(
+        [&] {
+            std::lock_guard<std::mutex> const lk(order_mutex);
+            execution_order.push_back(128);
+        },
+        128
+    );
 
-    pool.Submit([&] {
-        std::lock_guard<std::mutex> lk(order_mutex);
-        execution_order.push_back(1);
-    }, 1);
+    pool.Submit(
+        [&] {
+            std::lock_guard<std::mutex> const lk(order_mutex);
+            execution_order.push_back(1);
+        },
+        1
+    );
 
-    pool.Submit([&] {
-        std::lock_guard<std::mutex> lk(order_mutex);
-        execution_order.push_back(0);
-    }, 0);
+    pool.Submit(
+        [&] {
+            std::lock_guard<std::mutex> const lk(order_mutex);
+            execution_order.push_back(0);
+        },
+        0
+    );
 
     pool.Resume();
     pool.WaitIdle();
 
-    TEST_ASSERT_EQ(execution_order.size(), 4u, "All priority tasks ran");
+    TEST_ASSERT_EQ(execution_order.size(), 4U, "All priority tasks ran");
 
     // Expected order: 0, 1, 128, 255 (highest priority first).
     if (execution_order.size() == 4) {
-        TEST_ASSERT_EQ(execution_order[0], 0,   "First executed: priority 0");
-        TEST_ASSERT_EQ(execution_order[1], 1,   "Second executed: priority 1");
+        TEST_ASSERT_EQ(execution_order[0], 0, "First executed: priority 0");
+        TEST_ASSERT_EQ(execution_order[1], 1, "Second executed: priority 1");
         TEST_ASSERT_EQ(execution_order[2], 128, "Third executed: priority 128");
         TEST_ASSERT_EQ(execution_order[3], 255, "Fourth executed: priority 255");
     }
@@ -143,25 +153,34 @@ static void test_priority_ordering() {
     pool.Pause();
     execution_order.clear();
 
-    pool.Submit([&] {
-        std::lock_guard<std::mutex> lk(order_mutex);
-        execution_order.push_back(1);
-    }, 50);
+    pool.Submit(
+        [&] {
+            std::lock_guard<std::mutex> const lk(order_mutex);
+            execution_order.push_back(1);
+        },
+        50
+    );
 
-    pool.Submit([&] {
-        std::lock_guard<std::mutex> lk(order_mutex);
-        execution_order.push_back(2);
-    }, 50);
+    pool.Submit(
+        [&] {
+            std::lock_guard<std::mutex> const lk(order_mutex);
+            execution_order.push_back(2);
+        },
+        50
+    );
 
-    pool.Submit([&] {
-        std::lock_guard<std::mutex> lk(order_mutex);
-        execution_order.push_back(3);
-    }, 50);
+    pool.Submit(
+        [&] {
+            std::lock_guard<std::mutex> const lk(order_mutex);
+            execution_order.push_back(3);
+        },
+        50
+    );
 
     pool.Resume();
     pool.WaitIdle();
 
-    TEST_ASSERT_EQ(execution_order.size(), 3u, "All same-priority tasks ran");
+    TEST_ASSERT_EQ(execution_order.size(), 3U, "All same-priority tasks ran");
     if (execution_order.size() == 3) {
         TEST_ASSERT_EQ(execution_order[0], 1, "FIFO: first submitted runs first");
         TEST_ASSERT_EQ(execution_order[1], 2, "FIFO: second submitted runs second");
@@ -183,8 +202,9 @@ static void test_shutdown() {
             pool.Submit([&counter] {
                 // Simulate some work.
                 volatile int sink = 0;
-                for (int j = 0; j < 10000; ++j)
+                for (int j = 0; j < 10'000; ++j) {
                     sink = j;
+                }
                 (void)sink;
                 counter.fetch_add(1, std::memory_order_relaxed);
             });
@@ -192,23 +212,22 @@ static void test_shutdown() {
         // Destructor runs here -- must wait for all tasks.
     }
 
-    TEST_ASSERT_EQ(counter.load(), TASK_COUNT,
-                   "Destructor waited for all tasks");
+    TEST_ASSERT_EQ(counter.load(), TASK_COUNT, "Destructor waited for all tasks");
 }
 
 // ── test_worker_count ──────────────────────────────────────────────────
 static void test_worker_count() {
     std::printf("test_worker_count...\n");
 
-    TexServer::ThreadPool pool4(4);
-    TEST_ASSERT_EQ(pool4.WorkerCount(), 4u, "WorkerCount == 4");
+    TexServer::ThreadPool const pool4(4);
+    TEST_ASSERT_EQ(pool4.WorkerCount(), 4U, "WorkerCount == 4");
 
-    TexServer::ThreadPool pool1(1);
-    TEST_ASSERT_EQ(pool1.WorkerCount(), 1u, "WorkerCount == 1");
+    TexServer::ThreadPool const pool1(1);
+    TEST_ASSERT_EQ(pool1.WorkerCount(), 1U, "WorkerCount == 1");
 }
 
 // ── main ───────────────────────────────────────────────────────────────
-int main() {
+auto main() -> int {
     std::printf("=== ThreadPool Tests ===\n");
 
     test_basic_execution();
@@ -220,8 +239,7 @@ int main() {
     if (g_failures == 0) {
         std::printf("\nAll tests PASSED.\n");
         return 0;
-    } else {
-        std::fprintf(stderr, "\n%d test(s) FAILED.\n", g_failures);
+    }         std::fprintf(stderr, "\n%d test(s) FAILED.\n", g_failures);
         return 1;
-    }
+   
 }

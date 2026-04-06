@@ -19,10 +19,11 @@
 
 namespace Common {
 
-bool PatchBytes(void *dst, const void *src, size_t len) {
+auto PatchBytes(void* dst, const void* src, size_t len) -> bool {
     DWORD oldProt = 0;
-    if (!VirtualProtect(dst, len, PAGE_EXECUTE_READWRITE, &oldProt))
+    if (VirtualProtect(dst, len, PAGE_EXECUTE_READWRITE, &oldProt) == 0) {
         return false;
+    }
 
     std::memcpy(dst, src, len);
     FlushInstructionCache(GetCurrentProcess(), dst, len);

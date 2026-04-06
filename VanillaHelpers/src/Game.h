@@ -33,7 +33,9 @@ enum TYPE_MASK {
     TYPEMASK_CORPSE = 0x80,
 };
 
-enum EGxRenderState { GxRs_Texture0 = 23 };
+enum EGxRenderState {
+    GxRs_Texture0 = 23
+};
 
 enum EGxPrim {
     GxPrim_Points = 0,
@@ -176,74 +178,74 @@ enum EContainerFields {
 };
 
 enum EUnitFields {
-    UNIT_FIELD_CHARM = OBJECT_END + 0x0,                     // 0x006 - Size: 2 - Type: GUID
-    UNIT_FIELD_SUMMON = OBJECT_END + 0x2,                    // 0x008 - Size: 2 - Type: GUID
-    UNIT_FIELD_CHARMEDBY = OBJECT_END + 0x4,                 // 0x00A - Size: 2 - Type: GUID
-    UNIT_FIELD_SUMMONEDBY = OBJECT_END + 0x6,                // 0x00C - Size: 2 - Type: GUID
-    UNIT_FIELD_CREATEDBY = OBJECT_END + 0x8,                 // 0x00E - Size: 2 - Type: GUID
-    UNIT_FIELD_TARGET = OBJECT_END + 0xA,                    // 0x010 - Size: 2 - Type: GUID
-    UNIT_FIELD_PERSUADED = OBJECT_END + 0xC,                 // 0x012 - Size: 2 - Type: GUID
-    UNIT_FIELD_CHANNEL_OBJECT = OBJECT_END + 0xE,            // 0x014 - Size: 2 - Type: GUID
-    UNIT_FIELD_HEALTH = OBJECT_END + 0x10,                   // 0x016 - Size: 1 - Type: INT
-    UNIT_FIELD_POWER1 = OBJECT_END + 0x11,                   // 0x017 - Size: 1 - Type: INT
-    UNIT_FIELD_POWER2 = OBJECT_END + 0x12,                   // 0x018 - Size: 1 - Type: INT
-    UNIT_FIELD_POWER3 = OBJECT_END + 0x13,                   // 0x019 - Size: 1 - Type: INT
-    UNIT_FIELD_POWER4 = OBJECT_END + 0x14,                   // 0x01A - Size: 1 - Type: INT
-    UNIT_FIELD_POWER5 = OBJECT_END + 0x15,                   // 0x01B - Size: 1 - Type: INT
-    UNIT_FIELD_MAXHEALTH = OBJECT_END + 0x16,                // 0x01C - Size: 1 - Type: INT
-    UNIT_FIELD_MAXPOWER1 = OBJECT_END + 0x17,                // 0x01D - Size: 1 - Type: INT
-    UNIT_FIELD_MAXPOWER2 = OBJECT_END + 0x18,                // 0x01E - Size: 1 - Type: INT
-    UNIT_FIELD_MAXPOWER3 = OBJECT_END + 0x19,                // 0x01F - Size: 1 - Type: INT
-    UNIT_FIELD_MAXPOWER4 = OBJECT_END + 0x1A,                // 0x020 - Size: 1 - Type: INT
-    UNIT_FIELD_MAXPOWER5 = OBJECT_END + 0x1B,                // 0x021 - Size: 1 - Type: INT
-    UNIT_FIELD_LEVEL = OBJECT_END + 0x1C,                    // 0x022 - Size: 1 - Type: INT
-    UNIT_FIELD_FACTIONTEMPLATE = OBJECT_END + 0x1D,          // 0x023 - Size: 1 - Type: INT
-    UNIT_FIELD_BYTES_0 = OBJECT_END + 0x1E,                  // 0x024 - Size: 1 - Type: BYTES
-    UNIT_VIRTUAL_ITEM_SLOT_DISPLAY = OBJECT_END + 0x1F,      // 0x025 - Size: 3 - Type: INT
-    UNIT_VIRTUAL_ITEM_INFO = OBJECT_END + 0x22,              // 0x028 - Size: 6 - Type: BYTES
-    UNIT_FIELD_FLAGS = OBJECT_END + 0x28,                    // 0x02E - Size: 1 - Type: INT
-    UNIT_FIELD_AURA = OBJECT_END + 0x29,                     // 0x02F - Size: 48 - Type: INT
-    UNIT_FIELD_AURAFLAGS = OBJECT_END + 0x59,                // 0x05F - Size: 6 - Type: BYTES
-    UNIT_FIELD_AURALEVELS = OBJECT_END + 0x5F,               // 0x065 - Size: 12 - Type: BYTES
-    UNIT_FIELD_AURAAPPLICATIONS = OBJECT_END + 0x6B,         // 0x071 - Size: 12 - Type: BYTES
-    UNIT_FIELD_AURASTATE = OBJECT_END + 0x77,                // 0x07D - Size: 1 - Type: INT
-    UNIT_FIELD_BASEATTACKTIME = OBJECT_END + 0x78,           // 0x07E - Size: 2 - Type: INT
-    UNIT_FIELD_RANGEDATTACKTIME = OBJECT_END + 0x7A,         // 0x080 - Size: 1 - Type: INT
-    UNIT_FIELD_BOUNDINGRADIUS = OBJECT_END + 0x7B,           // 0x081 - Size: 1 - Type: FLOAT
-    UNIT_FIELD_COMBATREACH = OBJECT_END + 0x7C,              // 0x082 - Size: 1 - Type: FLOAT
-    UNIT_FIELD_DISPLAYID = OBJECT_END + 0x7D,                // 0x083 - Size: 1 - Type: INT
-    UNIT_FIELD_NATIVEDISPLAYID = OBJECT_END + 0x7E,          // 0x084 - Size: 1 - Type: INT
-    UNIT_FIELD_MOUNTDISPLAYID = OBJECT_END + 0x7F,           // 0x085 - Size: 1 - Type: INT
-    UNIT_FIELD_MINDAMAGE = OBJECT_END + 0x80,                // 0x086 - Size: 1 - Type: FLOAT
-    UNIT_FIELD_MAXDAMAGE = OBJECT_END + 0x81,                // 0x087 - Size: 1 - Type: FLOAT
-    UNIT_FIELD_MINOFFHANDDAMAGE = OBJECT_END + 0x82,         // 0x088 - Size: 1 - Type: FLOAT
-    UNIT_FIELD_MAXOFFHANDDAMAGE = OBJECT_END + 0x83,         // 0x089 - Size: 1 - Type: FLOAT
-    UNIT_FIELD_BYTES_1 = OBJECT_END + 0x84,                  // 0x08A - Size: 1 - Type: BYTES
-    UNIT_FIELD_PETNUMBER = OBJECT_END + 0x85,                // 0x08B - Size: 1 - Type: INT
-    UNIT_FIELD_PET_NAME_TIMESTAMP = OBJECT_END + 0x86,       // 0x08C - Size: 1 - Type: INT
-    UNIT_FIELD_PETEXPERIENCE = OBJECT_END + 0x87,            // 0x08D - Size: 1 - Type: INT
-    UNIT_FIELD_PETNEXTLEVELEXP = OBJECT_END + 0x88,          // 0x08E - Size: 1 - Type: INT
-    UNIT_DYNAMIC_FLAGS = OBJECT_END + 0x89,                  // 0x08F - Size: 1 - Type: INT
-    UNIT_CHANNEL_SPELL = OBJECT_END + 0x8A,                  // 0x090 - Size: 1 - Type: INT
-    UNIT_MOD_CAST_SPEED = OBJECT_END + 0x8B,                 // 0x091 - Size: 1 - Type: FLOAT
-    UNIT_CREATED_BY_SPELL = OBJECT_END + 0x8C,               // 0x092 - Size: 1 - Type: INT
-    UNIT_NPC_FLAGS = OBJECT_END + 0x8D,                      // 0x093 - Size: 1 - Type: INT
-    UNIT_NPC_EMOTESTATE = OBJECT_END + 0x8E,                 // 0x094 - Size: 1 - Type: INT
-    UNIT_TRAINING_POINTS = OBJECT_END + 0x8F,                // 0x095 - Size: 1 - Type: TWO_SHORT
-    UNIT_FIELD_STAT0 = OBJECT_END + 0x90,                    // 0x096 - Size: 1 - Type: INT
-    UNIT_FIELD_STAT1 = OBJECT_END + 0x91,                    // 0x097 - Size: 1 - Type: INT
-    UNIT_FIELD_STAT2 = OBJECT_END + 0x92,                    // 0x098 - Size: 1 - Type: INT
-    UNIT_FIELD_STAT3 = OBJECT_END + 0x93,                    // 0x099 - Size: 1 - Type: INT
-    UNIT_FIELD_STAT4 = OBJECT_END + 0x94,                    // 0x09A - Size: 1 - Type: INT
-    UNIT_FIELD_RESISTANCES = OBJECT_END + 0x95,              // 0x09B - Size: 7 - Type: INT
-    UNIT_FIELD_BASE_MANA = OBJECT_END + 0x9C,                // 0x0A2 - Size: 1 - Type: INT
-    UNIT_FIELD_BASE_HEALTH = OBJECT_END + 0x9D,              // 0x0A3 - Size: 1 - Type: INT
-    UNIT_FIELD_BYTES_2 = OBJECT_END + 0x9E,                  // 0x0A4 - Size: 1 - Type: BYTES
-    UNIT_FIELD_ATTACK_POWER = OBJECT_END + 0x9F,             // 0x0A5 - Size: 1 - Type: INT
-    UNIT_FIELD_ATTACK_POWER_MODS = OBJECT_END + 0xA0,        // 0x0A6 - Size: 1 - Type: TWO_SHORT
-    UNIT_FIELD_ATTACK_POWER_MULTIPLIER = OBJECT_END + 0xA1,  // 0x0A7 - Size: 1 - Type: FLOAT
-    UNIT_FIELD_RANGED_ATTACK_POWER = OBJECT_END + 0xA2,      // 0x0A8 - Size: 1 - Type: INT
-    UNIT_FIELD_RANGED_ATTACK_POWER_MODS = OBJECT_END + 0xA3, // 0x0A9 - Size: 1 - Type: TWO_SHORT
+    UNIT_FIELD_CHARM = OBJECT_END + 0x0,                           // 0x006 - Size: 2 - Type: GUID
+    UNIT_FIELD_SUMMON = OBJECT_END + 0x2,                          // 0x008 - Size: 2 - Type: GUID
+    UNIT_FIELD_CHARMEDBY = OBJECT_END + 0x4,                       // 0x00A - Size: 2 - Type: GUID
+    UNIT_FIELD_SUMMONEDBY = OBJECT_END + 0x6,                      // 0x00C - Size: 2 - Type: GUID
+    UNIT_FIELD_CREATEDBY = OBJECT_END + 0x8,                       // 0x00E - Size: 2 - Type: GUID
+    UNIT_FIELD_TARGET = OBJECT_END + 0xA,                          // 0x010 - Size: 2 - Type: GUID
+    UNIT_FIELD_PERSUADED = OBJECT_END + 0xC,                       // 0x012 - Size: 2 - Type: GUID
+    UNIT_FIELD_CHANNEL_OBJECT = OBJECT_END + 0xE,                  // 0x014 - Size: 2 - Type: GUID
+    UNIT_FIELD_HEALTH = OBJECT_END + 0x10,                         // 0x016 - Size: 1 - Type: INT
+    UNIT_FIELD_POWER1 = OBJECT_END + 0x11,                         // 0x017 - Size: 1 - Type: INT
+    UNIT_FIELD_POWER2 = OBJECT_END + 0x12,                         // 0x018 - Size: 1 - Type: INT
+    UNIT_FIELD_POWER3 = OBJECT_END + 0x13,                         // 0x019 - Size: 1 - Type: INT
+    UNIT_FIELD_POWER4 = OBJECT_END + 0x14,                         // 0x01A - Size: 1 - Type: INT
+    UNIT_FIELD_POWER5 = OBJECT_END + 0x15,                         // 0x01B - Size: 1 - Type: INT
+    UNIT_FIELD_MAXHEALTH = OBJECT_END + 0x16,                      // 0x01C - Size: 1 - Type: INT
+    UNIT_FIELD_MAXPOWER1 = OBJECT_END + 0x17,                      // 0x01D - Size: 1 - Type: INT
+    UNIT_FIELD_MAXPOWER2 = OBJECT_END + 0x18,                      // 0x01E - Size: 1 - Type: INT
+    UNIT_FIELD_MAXPOWER3 = OBJECT_END + 0x19,                      // 0x01F - Size: 1 - Type: INT
+    UNIT_FIELD_MAXPOWER4 = OBJECT_END + 0x1A,                      // 0x020 - Size: 1 - Type: INT
+    UNIT_FIELD_MAXPOWER5 = OBJECT_END + 0x1B,                      // 0x021 - Size: 1 - Type: INT
+    UNIT_FIELD_LEVEL = OBJECT_END + 0x1C,                          // 0x022 - Size: 1 - Type: INT
+    UNIT_FIELD_FACTIONTEMPLATE = OBJECT_END + 0x1D,                // 0x023 - Size: 1 - Type: INT
+    UNIT_FIELD_BYTES_0 = OBJECT_END + 0x1E,                        // 0x024 - Size: 1 - Type: BYTES
+    UNIT_VIRTUAL_ITEM_SLOT_DISPLAY = OBJECT_END + 0x1F,            // 0x025 - Size: 3 - Type: INT
+    UNIT_VIRTUAL_ITEM_INFO = OBJECT_END + 0x22,                    // 0x028 - Size: 6 - Type: BYTES
+    UNIT_FIELD_FLAGS = OBJECT_END + 0x28,                          // 0x02E - Size: 1 - Type: INT
+    UNIT_FIELD_AURA = OBJECT_END + 0x29,                           // 0x02F - Size: 48 - Type: INT
+    UNIT_FIELD_AURAFLAGS = OBJECT_END + 0x59,                      // 0x05F - Size: 6 - Type: BYTES
+    UNIT_FIELD_AURALEVELS = OBJECT_END + 0x5F,                     // 0x065 - Size: 12 - Type: BYTES
+    UNIT_FIELD_AURAAPPLICATIONS = OBJECT_END + 0x6B,               // 0x071 - Size: 12 - Type: BYTES
+    UNIT_FIELD_AURASTATE = OBJECT_END + 0x77,                      // 0x07D - Size: 1 - Type: INT
+    UNIT_FIELD_BASEATTACKTIME = OBJECT_END + 0x78,                 // 0x07E - Size: 2 - Type: INT
+    UNIT_FIELD_RANGEDATTACKTIME = OBJECT_END + 0x7A,               // 0x080 - Size: 1 - Type: INT
+    UNIT_FIELD_BOUNDINGRADIUS = OBJECT_END + 0x7B,                 // 0x081 - Size: 1 - Type: FLOAT
+    UNIT_FIELD_COMBATREACH = OBJECT_END + 0x7C,                    // 0x082 - Size: 1 - Type: FLOAT
+    UNIT_FIELD_DISPLAYID = OBJECT_END + 0x7D,                      // 0x083 - Size: 1 - Type: INT
+    UNIT_FIELD_NATIVEDISPLAYID = OBJECT_END + 0x7E,                // 0x084 - Size: 1 - Type: INT
+    UNIT_FIELD_MOUNTDISPLAYID = OBJECT_END + 0x7F,                 // 0x085 - Size: 1 - Type: INT
+    UNIT_FIELD_MINDAMAGE = OBJECT_END + 0x80,                      // 0x086 - Size: 1 - Type: FLOAT
+    UNIT_FIELD_MAXDAMAGE = OBJECT_END + 0x81,                      // 0x087 - Size: 1 - Type: FLOAT
+    UNIT_FIELD_MINOFFHANDDAMAGE = OBJECT_END + 0x82,               // 0x088 - Size: 1 - Type: FLOAT
+    UNIT_FIELD_MAXOFFHANDDAMAGE = OBJECT_END + 0x83,               // 0x089 - Size: 1 - Type: FLOAT
+    UNIT_FIELD_BYTES_1 = OBJECT_END + 0x84,                        // 0x08A - Size: 1 - Type: BYTES
+    UNIT_FIELD_PETNUMBER = OBJECT_END + 0x85,                      // 0x08B - Size: 1 - Type: INT
+    UNIT_FIELD_PET_NAME_TIMESTAMP = OBJECT_END + 0x86,             // 0x08C - Size: 1 - Type: INT
+    UNIT_FIELD_PETEXPERIENCE = OBJECT_END + 0x87,                  // 0x08D - Size: 1 - Type: INT
+    UNIT_FIELD_PETNEXTLEVELEXP = OBJECT_END + 0x88,                // 0x08E - Size: 1 - Type: INT
+    UNIT_DYNAMIC_FLAGS = OBJECT_END + 0x89,                        // 0x08F - Size: 1 - Type: INT
+    UNIT_CHANNEL_SPELL = OBJECT_END + 0x8A,                        // 0x090 - Size: 1 - Type: INT
+    UNIT_MOD_CAST_SPEED = OBJECT_END + 0x8B,                       // 0x091 - Size: 1 - Type: FLOAT
+    UNIT_CREATED_BY_SPELL = OBJECT_END + 0x8C,                     // 0x092 - Size: 1 - Type: INT
+    UNIT_NPC_FLAGS = OBJECT_END + 0x8D,                            // 0x093 - Size: 1 - Type: INT
+    UNIT_NPC_EMOTESTATE = OBJECT_END + 0x8E,                       // 0x094 - Size: 1 - Type: INT
+    UNIT_TRAINING_POINTS = OBJECT_END + 0x8F,                      // 0x095 - Size: 1 - Type: TWO_SHORT
+    UNIT_FIELD_STAT0 = OBJECT_END + 0x90,                          // 0x096 - Size: 1 - Type: INT
+    UNIT_FIELD_STAT1 = OBJECT_END + 0x91,                          // 0x097 - Size: 1 - Type: INT
+    UNIT_FIELD_STAT2 = OBJECT_END + 0x92,                          // 0x098 - Size: 1 - Type: INT
+    UNIT_FIELD_STAT3 = OBJECT_END + 0x93,                          // 0x099 - Size: 1 - Type: INT
+    UNIT_FIELD_STAT4 = OBJECT_END + 0x94,                          // 0x09A - Size: 1 - Type: INT
+    UNIT_FIELD_RESISTANCES = OBJECT_END + 0x95,                    // 0x09B - Size: 7 - Type: INT
+    UNIT_FIELD_BASE_MANA = OBJECT_END + 0x9C,                      // 0x0A2 - Size: 1 - Type: INT
+    UNIT_FIELD_BASE_HEALTH = OBJECT_END + 0x9D,                    // 0x0A3 - Size: 1 - Type: INT
+    UNIT_FIELD_BYTES_2 = OBJECT_END + 0x9E,                        // 0x0A4 - Size: 1 - Type: BYTES
+    UNIT_FIELD_ATTACK_POWER = OBJECT_END + 0x9F,                   // 0x0A5 - Size: 1 - Type: INT
+    UNIT_FIELD_ATTACK_POWER_MODS = OBJECT_END + 0xA0,              // 0x0A6 - Size: 1 - Type: TWO_SHORT
+    UNIT_FIELD_ATTACK_POWER_MULTIPLIER = OBJECT_END + 0xA1,        // 0x0A7 - Size: 1 - Type: FLOAT
+    UNIT_FIELD_RANGED_ATTACK_POWER = OBJECT_END + 0xA2,            // 0x0A8 - Size: 1 - Type: INT
+    UNIT_FIELD_RANGED_ATTACK_POWER_MODS = OBJECT_END + 0xA3,       // 0x0A9 - Size: 1 - Type: TWO_SHORT
     UNIT_FIELD_RANGED_ATTACK_POWER_MULTIPLIER = OBJECT_END + 0xA4, // 0x0AA - Size: 1 - Type: FLOAT
     UNIT_FIELD_MINRANGEDDAMAGE = OBJECT_END + 0xA5,                // 0x0AB - Size: 1 - Type: FLOAT
     UNIT_FIELD_MAXRANGEDDAMAGE = OBJECT_END + 0xA6,                // 0x0AC - Size: 1 - Type: FLOAT
@@ -254,181 +256,181 @@ enum EUnitFields {
 };
 
 enum EPlayerFields {
-    PLAYER_DUEL_ARBITER = UNIT_END + 0x0,                 // 0x0B0 - Size: 2 - Type: GUID
-    PLAYER_FLAGS = UNIT_END + 0x2,                        // 0x0B2 - Size: 1 - Type: INT
-    PLAYER_GUILDID = UNIT_END + 0x3,                      // 0x0B3 - Size: 1 - Type: INT
-    PLAYER_GUILDRANK = UNIT_END + 0x4,                    // 0x0B4 - Size: 1 - Type: INT
-    PLAYER_BYTES = UNIT_END + 0x5,                        // 0x0B5 - Size: 1 - Type: BYTES
-    PLAYER_BYTES_2 = UNIT_END + 0x6,                      // 0x0B6 - Size: 1 - Type: BYTES
-    PLAYER_BYTES_3 = UNIT_END + 0x7,                      // 0x0B7 - Size: 1 - Type: BYTES
-    PLAYER_DUEL_TEAM = UNIT_END + 0x8,                    // 0x0B8 - Size: 1 - Type: INT
-    PLAYER_GUILD_TIMESTAMP = UNIT_END + 0x9,              // 0x0B9 - Size: 1 - Type: INT
-    PLAYER_QUEST_LOG_1_1 = UNIT_END + 0xA,                // 0x0BA - Size: 1 - Type: INT
-    PLAYER_QUEST_LOG_1_2 = UNIT_END + 0xB,                // 0x0BB - Size: 2 - Type: INT
-    PLAYER_QUEST_LOG_2_1 = UNIT_END + 0xD,                // 0x0BD - Size: 1 - Type: INT
-    PLAYER_QUEST_LOG_2_2 = UNIT_END + 0xE,                // 0x0BE - Size: 2 - Type: INT
-    PLAYER_QUEST_LOG_3_1 = UNIT_END + 0x10,               // 0x0C0 - Size: 1 - Type: INT
-    PLAYER_QUEST_LOG_3_2 = UNIT_END + 0x11,               // 0x0C1 - Size: 2 - Type: INT
-    PLAYER_QUEST_LOG_4_1 = UNIT_END + 0x13,               // 0x0C3 - Size: 1 - Type: INT
-    PLAYER_QUEST_LOG_4_2 = UNIT_END + 0x14,               // 0x0C4 - Size: 2 - Type: INT
-    PLAYER_QUEST_LOG_5_1 = UNIT_END + 0x16,               // 0x0C6 - Size: 1 - Type: INT
-    PLAYER_QUEST_LOG_5_2 = UNIT_END + 0x17,               // 0x0C7 - Size: 2 - Type: INT
-    PLAYER_QUEST_LOG_6_1 = UNIT_END + 0x19,               // 0x0C9 - Size: 1 - Type: INT
-    PLAYER_QUEST_LOG_6_2 = UNIT_END + 0x1A,               // 0x0CA - Size: 2 - Type: INT
-    PLAYER_QUEST_LOG_7_1 = UNIT_END + 0x1C,               // 0x0CC - Size: 1 - Type: INT
-    PLAYER_QUEST_LOG_7_2 = UNIT_END + 0x1D,               // 0x0CD - Size: 2 - Type: INT
-    PLAYER_QUEST_LOG_8_1 = UNIT_END + 0x1F,               // 0x0CF - Size: 1 - Type: INT
-    PLAYER_QUEST_LOG_8_2 = UNIT_END + 0x20,               // 0x0D0 - Size: 2 - Type: INT
-    PLAYER_QUEST_LOG_9_1 = UNIT_END + 0x22,               // 0x0D2 - Size: 1 - Type: INT
-    PLAYER_QUEST_LOG_9_2 = UNIT_END + 0x23,               // 0x0D3 - Size: 2 - Type: INT
-    PLAYER_QUEST_LOG_10_1 = UNIT_END + 0x25,              // 0x0D5 - Size: 1 - Type: INT
-    PLAYER_QUEST_LOG_10_2 = UNIT_END + 0x26,              // 0x0D6 - Size: 2 - Type: INT
-    PLAYER_QUEST_LOG_11_1 = UNIT_END + 0x28,              // 0x0D8 - Size: 1 - Type: INT
-    PLAYER_QUEST_LOG_11_2 = UNIT_END + 0x29,              // 0x0D9 - Size: 2 - Type: INT
-    PLAYER_QUEST_LOG_12_1 = UNIT_END + 0x2B,              // 0x0DB - Size: 1 - Type: INT
-    PLAYER_QUEST_LOG_12_2 = UNIT_END + 0x2C,              // 0x0DC - Size: 2 - Type: INT
-    PLAYER_QUEST_LOG_13_1 = UNIT_END + 0x2E,              // 0x0DE - Size: 1 - Type: INT
-    PLAYER_QUEST_LOG_13_2 = UNIT_END + 0x2F,              // 0x0DF - Size: 2 - Type: INT
-    PLAYER_QUEST_LOG_14_1 = UNIT_END + 0x31,              // 0x0E1 - Size: 1 - Type: INT
-    PLAYER_QUEST_LOG_14_2 = UNIT_END + 0x32,              // 0x0E2 - Size: 2 - Type: INT
-    PLAYER_QUEST_LOG_15_1 = UNIT_END + 0x34,              // 0x0E4 - Size: 1 - Type: INT
-    PLAYER_QUEST_LOG_15_2 = UNIT_END + 0x35,              // 0x0E5 - Size: 2 - Type: INT
-    PLAYER_QUEST_LOG_16_1 = UNIT_END + 0x37,              // 0x0E7 - Size: 1 - Type: INT
-    PLAYER_QUEST_LOG_16_2 = UNIT_END + 0x38,              // 0x0E8 - Size: 2 - Type: INT
-    PLAYER_QUEST_LOG_17_1 = UNIT_END + 0x3A,              // 0x0EA - Size: 1 - Type: INT
-    PLAYER_QUEST_LOG_17_2 = UNIT_END + 0x3B,              // 0x0EB - Size: 2 - Type: INT
-    PLAYER_QUEST_LOG_18_1 = UNIT_END + 0x3D,              // 0x0ED - Size: 1 - Type: INT
-    PLAYER_QUEST_LOG_18_2 = UNIT_END + 0x3E,              // 0x0EE - Size: 2 - Type: INT
-    PLAYER_QUEST_LOG_19_1 = UNIT_END + 0x40,              // 0x0F0 - Size: 1 - Type: INT
-    PLAYER_QUEST_LOG_19_2 = UNIT_END + 0x41,              // 0x0F1 - Size: 2 - Type: INT
-    PLAYER_QUEST_LOG_20_1 = UNIT_END + 0x43,              // 0x0F3 - Size: 1 - Type: INT
-    PLAYER_QUEST_LOG_20_2 = UNIT_END + 0x44,              // 0x0F4 - Size: 2 - Type: INT
-    PLAYER_VISIBLE_ITEM_1_CREATOR = UNIT_END + 0x46,      // 0x0F6 - Size: 2 - Type: GUID
-    PLAYER_VISIBLE_ITEM_1_0 = UNIT_END + 0x48,            // 0x0F8 - Size: 8 - Type: INT
-    PLAYER_VISIBLE_ITEM_1_PROPERTIES = UNIT_END + 0x50,   // 0x100 - Size: 1 - Type: TWO_SHORT
-    PLAYER_VISIBLE_ITEM_1_PAD = UNIT_END + 0x51,          // 0x101 - Size: 1 - Type: INT
-    PLAYER_VISIBLE_ITEM_2_CREATOR = UNIT_END + 0x52,      // 0x102 - Size: 2 - Type: GUID
-    PLAYER_VISIBLE_ITEM_2_0 = UNIT_END + 0x54,            // 0x104 - Size: 8 - Type: INT
-    PLAYER_VISIBLE_ITEM_2_PROPERTIES = UNIT_END + 0x5C,   // 0x10C - Size: 1 - Type: TWO_SHORT
-    PLAYER_VISIBLE_ITEM_2_PAD = UNIT_END + 0x5D,          // 0x10D - Size: 1 - Type: INT
-    PLAYER_VISIBLE_ITEM_3_CREATOR = UNIT_END + 0x5E,      // 0x10E - Size: 2 - Type: GUID
-    PLAYER_VISIBLE_ITEM_3_0 = UNIT_END + 0x60,            // 0x110 - Size: 8 - Type: INT
-    PLAYER_VISIBLE_ITEM_3_PROPERTIES = UNIT_END + 0x68,   // 0x118 - Size: 1 - Type: TWO_SHORT
-    PLAYER_VISIBLE_ITEM_3_PAD = UNIT_END + 0x69,          // 0x119 - Size: 1 - Type: INT
-    PLAYER_VISIBLE_ITEM_4_CREATOR = UNIT_END + 0x6A,      // 0x11A - Size: 2 - Type: GUID
-    PLAYER_VISIBLE_ITEM_4_0 = UNIT_END + 0x6C,            // 0x11C - Size: 8 - Type: INT
-    PLAYER_VISIBLE_ITEM_4_PROPERTIES = UNIT_END + 0x74,   // 0x124 - Size: 1 - Type: TWO_SHORT
-    PLAYER_VISIBLE_ITEM_4_PAD = UNIT_END + 0x75,          // 0x125 - Size: 1 - Type: INT
-    PLAYER_VISIBLE_ITEM_5_CREATOR = UNIT_END + 0x76,      // 0x126 - Size: 2 - Type: GUID
-    PLAYER_VISIBLE_ITEM_5_0 = UNIT_END + 0x78,            // 0x128 - Size: 8 - Type: INT
-    PLAYER_VISIBLE_ITEM_5_PROPERTIES = UNIT_END + 0x80,   // 0x130 - Size: 1 - Type: TWO_SHORT
-    PLAYER_VISIBLE_ITEM_5_PAD = UNIT_END + 0x81,          // 0x131 - Size: 1 - Type: INT
-    PLAYER_VISIBLE_ITEM_6_CREATOR = UNIT_END + 0x82,      // 0x132 - Size: 2 - Type: GUID
-    PLAYER_VISIBLE_ITEM_6_0 = UNIT_END + 0x84,            // 0x134 - Size: 8 - Type: INT
-    PLAYER_VISIBLE_ITEM_6_PROPERTIES = UNIT_END + 0x8C,   // 0x13C - Size: 1 - Type: TWO_SHORT
-    PLAYER_VISIBLE_ITEM_6_PAD = UNIT_END + 0x8D,          // 0x13D - Size: 1 - Type: INT
-    PLAYER_VISIBLE_ITEM_7_CREATOR = UNIT_END + 0x8E,      // 0x13E - Size: 2 - Type: GUID
-    PLAYER_VISIBLE_ITEM_7_0 = UNIT_END + 0x90,            // 0x140 - Size: 8 - Type: INT
-    PLAYER_VISIBLE_ITEM_7_PROPERTIES = UNIT_END + 0x98,   // 0x148 - Size: 1 - Type: TWO_SHORT
-    PLAYER_VISIBLE_ITEM_7_PAD = UNIT_END + 0x99,          // 0x149 - Size: 1 - Type: INT
-    PLAYER_VISIBLE_ITEM_8_CREATOR = UNIT_END + 0x9A,      // 0x14A - Size: 2 - Type: GUID
-    PLAYER_VISIBLE_ITEM_8_0 = UNIT_END + 0x9C,            // 0x14C - Size: 8 - Type: INT
-    PLAYER_VISIBLE_ITEM_8_PROPERTIES = UNIT_END + 0xA4,   // 0x154 - Size: 1 - Type: TWO_SHORT
-    PLAYER_VISIBLE_ITEM_8_PAD = UNIT_END + 0xA5,          // 0x155 - Size: 1 - Type: INT
-    PLAYER_VISIBLE_ITEM_9_CREATOR = UNIT_END + 0xA6,      // 0x156 - Size: 2 - Type: GUID
-    PLAYER_VISIBLE_ITEM_9_0 = UNIT_END + 0xA8,            // 0x158 - Size: 8 - Type: INT
-    PLAYER_VISIBLE_ITEM_9_PROPERTIES = UNIT_END + 0xB0,   // 0x160 - Size: 1 - Type: TWO_SHORT
-    PLAYER_VISIBLE_ITEM_9_PAD = UNIT_END + 0xB1,          // 0x161 - Size: 1 - Type: INT
-    PLAYER_VISIBLE_ITEM_10_CREATOR = UNIT_END + 0xB2,     // 0x162 - Size: 2 - Type: GUID
-    PLAYER_VISIBLE_ITEM_10_0 = UNIT_END + 0xB4,           // 0x164 - Size: 8 - Type: INT
-    PLAYER_VISIBLE_ITEM_10_PROPERTIES = UNIT_END + 0xBC,  // 0x16C - Size: 1 - Type: TWO_SHORT
-    PLAYER_VISIBLE_ITEM_10_PAD = UNIT_END + 0xBD,         // 0x16D - Size: 1 - Type: INT
-    PLAYER_VISIBLE_ITEM_11_CREATOR = UNIT_END + 0xBE,     // 0x16E - Size: 2 - Type: GUID
-    PLAYER_VISIBLE_ITEM_11_0 = UNIT_END + 0xC0,           // 0x170 - Size: 8 - Type: INT
-    PLAYER_VISIBLE_ITEM_11_PROPERTIES = UNIT_END + 0xC8,  // 0x178 - Size: 1 - Type: TWO_SHORT
-    PLAYER_VISIBLE_ITEM_11_PAD = UNIT_END + 0xC9,         // 0x179 - Size: 1 - Type: INT
-    PLAYER_VISIBLE_ITEM_12_CREATOR = UNIT_END + 0xCA,     // 0x17A - Size: 2 - Type: GUID
-    PLAYER_VISIBLE_ITEM_12_0 = UNIT_END + 0xCC,           // 0x17C - Size: 8 - Type: INT
-    PLAYER_VISIBLE_ITEM_12_PROPERTIES = UNIT_END + 0xD4,  // 0x184 - Size: 1 - Type: TWO_SHORT
-    PLAYER_VISIBLE_ITEM_12_PAD = UNIT_END + 0xD5,         // 0x185 - Size: 1 - Type: INT
-    PLAYER_VISIBLE_ITEM_13_CREATOR = UNIT_END + 0xD6,     // 0x186 - Size: 2 - Type: GUID
-    PLAYER_VISIBLE_ITEM_13_0 = UNIT_END + 0xD8,           // 0x188 - Size: 8 - Type: INT
-    PLAYER_VISIBLE_ITEM_13_PROPERTIES = UNIT_END + 0xE0,  // 0x190 - Size: 1 - Type: TWO_SHORT
-    PLAYER_VISIBLE_ITEM_13_PAD = UNIT_END + 0xE1,         // 0x191 - Size: 1 - Type: INT
-    PLAYER_VISIBLE_ITEM_14_CREATOR = UNIT_END + 0xE2,     // 0x192 - Size: 2 - Type: GUID
-    PLAYER_VISIBLE_ITEM_14_0 = UNIT_END + 0xE4,           // 0x194 - Size: 8 - Type: INT
-    PLAYER_VISIBLE_ITEM_14_PROPERTIES = UNIT_END + 0xEC,  // 0x19C - Size: 1 - Type: TWO_SHORT
-    PLAYER_VISIBLE_ITEM_14_PAD = UNIT_END + 0xED,         // 0x19D - Size: 1 - Type: INT
-    PLAYER_VISIBLE_ITEM_15_CREATOR = UNIT_END + 0xEE,     // 0x19E - Size: 2 - Type: GUID
-    PLAYER_VISIBLE_ITEM_15_0 = UNIT_END + 0xF0,           // 0x1A0 - Size: 8 - Type: INT
-    PLAYER_VISIBLE_ITEM_15_PROPERTIES = UNIT_END + 0xF8,  // 0x1A8 - Size: 1 - Type: TWO_SHORT
-    PLAYER_VISIBLE_ITEM_15_PAD = UNIT_END + 0xF9,         // 0x1A9 - Size: 1 - Type: INT
-    PLAYER_VISIBLE_ITEM_16_CREATOR = UNIT_END + 0xFA,     // 0x1AA - Size: 2 - Type: GUID
-    PLAYER_VISIBLE_ITEM_16_0 = UNIT_END + 0xFC,           // 0x1AC - Size: 8 - Type: INT
-    PLAYER_VISIBLE_ITEM_16_PROPERTIES = UNIT_END + 0x104, // 0x1B4 - Size: 1 - Type: TWO_SHORT
-    PLAYER_VISIBLE_ITEM_16_PAD = UNIT_END + 0x105,        // 0x1B5 - Size: 1 - Type: INT
-    PLAYER_VISIBLE_ITEM_17_CREATOR = UNIT_END + 0x106,    // 0x1B6 - Size: 2 - Type: GUID
-    PLAYER_VISIBLE_ITEM_17_0 = UNIT_END + 0x108,          // 0x1B8 - Size: 8 - Type: INT
-    PLAYER_VISIBLE_ITEM_17_PROPERTIES = UNIT_END + 0x110, // 0x1C0 - Size: 1 - Type: TWO_SHORT
-    PLAYER_VISIBLE_ITEM_17_PAD = UNIT_END + 0x111,        // 0x1C1 - Size: 1 - Type: INT
-    PLAYER_VISIBLE_ITEM_18_CREATOR = UNIT_END + 0x112,    // 0x1C2 - Size: 2 - Type: GUID
-    PLAYER_VISIBLE_ITEM_18_0 = UNIT_END + 0x114,          // 0x1C4 - Size: 8 - Type: INT
-    PLAYER_VISIBLE_ITEM_18_PROPERTIES = UNIT_END + 0x11C, // 0x1CC - Size: 1 - Type: TWO_SHORT
-    PLAYER_VISIBLE_ITEM_18_PAD = UNIT_END + 0x11D,        // 0x1CD - Size: 1 - Type: INT
-    PLAYER_VISIBLE_ITEM_19_CREATOR = UNIT_END + 0x11E,    // 0x1CE - Size: 2 - Type: GUID
-    PLAYER_VISIBLE_ITEM_19_0 = UNIT_END + 0x120,          // 0x1D0 - Size: 8 - Type: INT
-    PLAYER_VISIBLE_ITEM_19_PROPERTIES = UNIT_END + 0x128, // 0x1D8 - Size: 1 - Type: TWO_SHORT
-    PLAYER_VISIBLE_ITEM_19_PAD = UNIT_END + 0x129,        // 0x1D9 - Size: 1 - Type: INT
-    PLAYER_FIELD_INV_SLOT_HEAD = UNIT_END + 0x12A,        // 0x1DA - Size: 46 - Type: GUID
-    PLAYER_FIELD_PACK_SLOT_1 = UNIT_END + 0x158,          // 0x208 - Size: 32 - Type: GUID
-    PLAYER_FIELD_BANK_SLOT_1 = UNIT_END + 0x178,          // 0x228 - Size: 48 - Type: GUID
-    PLAYER_FIELD_BANKBAG_SLOT_1 = UNIT_END + 0x1A8,       // 0x258 - Size: 12 - Type: GUID
-    PLAYER_FIELD_VENDORBUYBACK_SLOT_1 = UNIT_END + 0x1B4, // 0x264 - Size: 24 - Type: GUID
-    PLAYER_FIELD_KEYRING_SLOT_1 = UNIT_END + 0x1CC,       // 0x27C - Size: 64 - Type: GUID
-    PLAYER_FARSIGHT = UNIT_END + 0x20C,                   // 0x2BC - Size: 2 - Type: GUID
-    PLAYER_FIELD_COMBO_TARGET = UNIT_END + 0x20E,         // 0x2BE - Size: 2 - Type: GUID
-    PLAYER_XP = UNIT_END + 0x210,                         // 0x2C0 - Size: 1 - Type: INT
-    PLAYER_NEXT_LEVEL_XP = UNIT_END + 0x211,              // 0x2C1 - Size: 1 - Type: INT
-    PLAYER_SKILL_INFO_1_1 = UNIT_END + 0x212,             // 0x2C2 - Size: 384 - Type: TWO_SHORT
-    PLAYER_CHARACTER_POINTS1 = UNIT_END + 0x392,          // 0x442 - Size: 1 - Type: INT
-    PLAYER_CHARACTER_POINTS2 = UNIT_END + 0x393,          // 0x443 - Size: 1 - Type: INT
-    PLAYER_TRACK_CREATURES = UNIT_END + 0x394,            // 0x444 - Size: 1 - Type: INT
-    PLAYER_TRACK_RESOURCES = UNIT_END + 0x395,            // 0x445 - Size: 1 - Type: INT
-    PLAYER_BLOCK_PERCENTAGE = UNIT_END + 0x396,           // 0x446 - Size: 1 - Type: FLOAT
-    PLAYER_DODGE_PERCENTAGE = UNIT_END + 0x397,           // 0x447 - Size: 1 - Type: FLOAT
-    PLAYER_PARRY_PERCENTAGE = UNIT_END + 0x398,           // 0x448 - Size: 1 - Type: FLOAT
-    PLAYER_CRIT_PERCENTAGE = UNIT_END + 0x399,            // 0x449 - Size: 1 - Type: FLOAT
-    PLAYER_RANGED_CRIT_PERCENTAGE = UNIT_END + 0x39A,     // 0x44A - Size: 1 - Type: FLOAT
-    PLAYER_EXPLORED_ZONES_1 = UNIT_END + 0x39B,           // 0x44B - Size: 64 - Type: BYTES
-    PLAYER_REST_STATE_EXPERIENCE = UNIT_END + 0x3DB,      // 0x48B - Size: 1 - Type: INT
-    PLAYER_FIELD_COINAGE = UNIT_END + 0x3DC,              // 0x48C - Size: 1 - Type: INT
-    PLAYER_FIELD_POSSTAT0 = UNIT_END + 0x3DD,             // 0x48D - Size: 1 - Type: INT
-    PLAYER_FIELD_POSSTAT1 = UNIT_END + 0x3DE,             // 0x48E - Size: 1 - Type: INT
-    PLAYER_FIELD_POSSTAT2 = UNIT_END + 0x3DF,             // 0x48F - Size: 1 - Type: INT
-    PLAYER_FIELD_POSSTAT3 = UNIT_END + 0x3E0,             // 0x490 - Size: 1 - Type: INT
-    PLAYER_FIELD_POSSTAT4 = UNIT_END + 0x3E1,             // 0x491 - Size: 1 - Type: INT
-    PLAYER_FIELD_NEGSTAT0 = UNIT_END + 0x3E2,             // 0x492 - Size: 1 - Type: INT
-    PLAYER_FIELD_NEGSTAT1 = UNIT_END + 0x3E3,             // 0x493 - Size: 1 - Type: INT
-    PLAYER_FIELD_NEGSTAT2 = UNIT_END + 0x3E4,             // 0x494 - Size: 1 - Type: INT
-    PLAYER_FIELD_NEGSTAT3 = UNIT_END + 0x3E5,             // 0x495 - Size: 1 - Type: INT
-    PLAYER_FIELD_NEGSTAT4 = UNIT_END + 0x3E6,             // 0x496 - Size: 1 - Type: INT
-    PLAYER_FIELD_RESISTANCEBUFFMODSPOSITIVE = UNIT_END + 0x3E7, // 0x497 - Size: 7 - Type: INT
-    PLAYER_FIELD_RESISTANCEBUFFMODSNEGATIVE = UNIT_END + 0x3EE, // 0x49E - Size: 7 - Type: INT
-    PLAYER_FIELD_MOD_DAMAGE_DONE_POS = UNIT_END + 0x3F5,        // 0x4A5 - Size: 7 - Type: INT
-    PLAYER_FIELD_MOD_DAMAGE_DONE_NEG = UNIT_END + 0x3FC,        // 0x4AC - Size: 7 - Type: INT
-    PLAYER_FIELD_MOD_DAMAGE_DONE_PCT = UNIT_END + 0x403,        // 0x4B3 - Size: 7 - Type: INT
-    PLAYER_FIELD_BYTES = UNIT_END + 0x40A,                      // 0x4BA - Size: 1 - Type: BYTES
-    PLAYER_AMMO_ID = UNIT_END + 0x40B,                          // 0x4BB - Size: 1 - Type: INT
-    PLAYER_SELF_RES_SPELL = UNIT_END + 0x40C,                   // 0x4BC - Size: 1 - Type: INT
-    PLAYER_FIELD_PVP_MEDALS = UNIT_END + 0x40D,                 // 0x4BD - Size: 1 - Type: INT
-    PLAYER_FIELD_BUYBACK_PRICE_1 = UNIT_END + 0x40E,            // 0x4BE - Size: 12 - Type: INT
-    PLAYER_FIELD_BUYBACK_TIMESTAMP_1 = UNIT_END + 0x41A,        // 0x4CA - Size: 12 - Type: INT
-    PLAYER_FIELD_SESSION_KILLS = UNIT_END + 0x426,              // 0x4D6 - Size: 1 - Type: TWO_SHORT
-    PLAYER_FIELD_YESTERDAY_KILLS = UNIT_END + 0x427,            // 0x4D7 - Size: 1 - Type: TWO_SHORT
-    PLAYER_FIELD_LAST_WEEK_KILLS = UNIT_END + 0x428,            // 0x4D8 - Size: 1 - Type: TWO_SHORT
-    PLAYER_FIELD_THIS_WEEK_KILLS = UNIT_END + 0x429,            // 0x4D9 - Size: 1 - Type: TWO_SHORT
-    PLAYER_FIELD_THIS_WEEK_CONTRIBUTION = UNIT_END + 0x42A,     // 0x4DA - Size: 1 - Type: INT
-    PLAYER_FIELD_LIFETIME_HONORBALE_KILLS = UNIT_END + 0x42B,   // 0x4DB - Size: 1 - Type: INT
+    PLAYER_DUEL_ARBITER = UNIT_END + 0x0,                        // 0x0B0 - Size: 2 - Type: GUID
+    PLAYER_FLAGS = UNIT_END + 0x2,                               // 0x0B2 - Size: 1 - Type: INT
+    PLAYER_GUILDID = UNIT_END + 0x3,                             // 0x0B3 - Size: 1 - Type: INT
+    PLAYER_GUILDRANK = UNIT_END + 0x4,                           // 0x0B4 - Size: 1 - Type: INT
+    PLAYER_BYTES = UNIT_END + 0x5,                               // 0x0B5 - Size: 1 - Type: BYTES
+    PLAYER_BYTES_2 = UNIT_END + 0x6,                             // 0x0B6 - Size: 1 - Type: BYTES
+    PLAYER_BYTES_3 = UNIT_END + 0x7,                             // 0x0B7 - Size: 1 - Type: BYTES
+    PLAYER_DUEL_TEAM = UNIT_END + 0x8,                           // 0x0B8 - Size: 1 - Type: INT
+    PLAYER_GUILD_TIMESTAMP = UNIT_END + 0x9,                     // 0x0B9 - Size: 1 - Type: INT
+    PLAYER_QUEST_LOG_1_1 = UNIT_END + 0xA,                       // 0x0BA - Size: 1 - Type: INT
+    PLAYER_QUEST_LOG_1_2 = UNIT_END + 0xB,                       // 0x0BB - Size: 2 - Type: INT
+    PLAYER_QUEST_LOG_2_1 = UNIT_END + 0xD,                       // 0x0BD - Size: 1 - Type: INT
+    PLAYER_QUEST_LOG_2_2 = UNIT_END + 0xE,                       // 0x0BE - Size: 2 - Type: INT
+    PLAYER_QUEST_LOG_3_1 = UNIT_END + 0x10,                      // 0x0C0 - Size: 1 - Type: INT
+    PLAYER_QUEST_LOG_3_2 = UNIT_END + 0x11,                      // 0x0C1 - Size: 2 - Type: INT
+    PLAYER_QUEST_LOG_4_1 = UNIT_END + 0x13,                      // 0x0C3 - Size: 1 - Type: INT
+    PLAYER_QUEST_LOG_4_2 = UNIT_END + 0x14,                      // 0x0C4 - Size: 2 - Type: INT
+    PLAYER_QUEST_LOG_5_1 = UNIT_END + 0x16,                      // 0x0C6 - Size: 1 - Type: INT
+    PLAYER_QUEST_LOG_5_2 = UNIT_END + 0x17,                      // 0x0C7 - Size: 2 - Type: INT
+    PLAYER_QUEST_LOG_6_1 = UNIT_END + 0x19,                      // 0x0C9 - Size: 1 - Type: INT
+    PLAYER_QUEST_LOG_6_2 = UNIT_END + 0x1A,                      // 0x0CA - Size: 2 - Type: INT
+    PLAYER_QUEST_LOG_7_1 = UNIT_END + 0x1C,                      // 0x0CC - Size: 1 - Type: INT
+    PLAYER_QUEST_LOG_7_2 = UNIT_END + 0x1D,                      // 0x0CD - Size: 2 - Type: INT
+    PLAYER_QUEST_LOG_8_1 = UNIT_END + 0x1F,                      // 0x0CF - Size: 1 - Type: INT
+    PLAYER_QUEST_LOG_8_2 = UNIT_END + 0x20,                      // 0x0D0 - Size: 2 - Type: INT
+    PLAYER_QUEST_LOG_9_1 = UNIT_END + 0x22,                      // 0x0D2 - Size: 1 - Type: INT
+    PLAYER_QUEST_LOG_9_2 = UNIT_END + 0x23,                      // 0x0D3 - Size: 2 - Type: INT
+    PLAYER_QUEST_LOG_10_1 = UNIT_END + 0x25,                     // 0x0D5 - Size: 1 - Type: INT
+    PLAYER_QUEST_LOG_10_2 = UNIT_END + 0x26,                     // 0x0D6 - Size: 2 - Type: INT
+    PLAYER_QUEST_LOG_11_1 = UNIT_END + 0x28,                     // 0x0D8 - Size: 1 - Type: INT
+    PLAYER_QUEST_LOG_11_2 = UNIT_END + 0x29,                     // 0x0D9 - Size: 2 - Type: INT
+    PLAYER_QUEST_LOG_12_1 = UNIT_END + 0x2B,                     // 0x0DB - Size: 1 - Type: INT
+    PLAYER_QUEST_LOG_12_2 = UNIT_END + 0x2C,                     // 0x0DC - Size: 2 - Type: INT
+    PLAYER_QUEST_LOG_13_1 = UNIT_END + 0x2E,                     // 0x0DE - Size: 1 - Type: INT
+    PLAYER_QUEST_LOG_13_2 = UNIT_END + 0x2F,                     // 0x0DF - Size: 2 - Type: INT
+    PLAYER_QUEST_LOG_14_1 = UNIT_END + 0x31,                     // 0x0E1 - Size: 1 - Type: INT
+    PLAYER_QUEST_LOG_14_2 = UNIT_END + 0x32,                     // 0x0E2 - Size: 2 - Type: INT
+    PLAYER_QUEST_LOG_15_1 = UNIT_END + 0x34,                     // 0x0E4 - Size: 1 - Type: INT
+    PLAYER_QUEST_LOG_15_2 = UNIT_END + 0x35,                     // 0x0E5 - Size: 2 - Type: INT
+    PLAYER_QUEST_LOG_16_1 = UNIT_END + 0x37,                     // 0x0E7 - Size: 1 - Type: INT
+    PLAYER_QUEST_LOG_16_2 = UNIT_END + 0x38,                     // 0x0E8 - Size: 2 - Type: INT
+    PLAYER_QUEST_LOG_17_1 = UNIT_END + 0x3A,                     // 0x0EA - Size: 1 - Type: INT
+    PLAYER_QUEST_LOG_17_2 = UNIT_END + 0x3B,                     // 0x0EB - Size: 2 - Type: INT
+    PLAYER_QUEST_LOG_18_1 = UNIT_END + 0x3D,                     // 0x0ED - Size: 1 - Type: INT
+    PLAYER_QUEST_LOG_18_2 = UNIT_END + 0x3E,                     // 0x0EE - Size: 2 - Type: INT
+    PLAYER_QUEST_LOG_19_1 = UNIT_END + 0x40,                     // 0x0F0 - Size: 1 - Type: INT
+    PLAYER_QUEST_LOG_19_2 = UNIT_END + 0x41,                     // 0x0F1 - Size: 2 - Type: INT
+    PLAYER_QUEST_LOG_20_1 = UNIT_END + 0x43,                     // 0x0F3 - Size: 1 - Type: INT
+    PLAYER_QUEST_LOG_20_2 = UNIT_END + 0x44,                     // 0x0F4 - Size: 2 - Type: INT
+    PLAYER_VISIBLE_ITEM_1_CREATOR = UNIT_END + 0x46,             // 0x0F6 - Size: 2 - Type: GUID
+    PLAYER_VISIBLE_ITEM_1_0 = UNIT_END + 0x48,                   // 0x0F8 - Size: 8 - Type: INT
+    PLAYER_VISIBLE_ITEM_1_PROPERTIES = UNIT_END + 0x50,          // 0x100 - Size: 1 - Type: TWO_SHORT
+    PLAYER_VISIBLE_ITEM_1_PAD = UNIT_END + 0x51,                 // 0x101 - Size: 1 - Type: INT
+    PLAYER_VISIBLE_ITEM_2_CREATOR = UNIT_END + 0x52,             // 0x102 - Size: 2 - Type: GUID
+    PLAYER_VISIBLE_ITEM_2_0 = UNIT_END + 0x54,                   // 0x104 - Size: 8 - Type: INT
+    PLAYER_VISIBLE_ITEM_2_PROPERTIES = UNIT_END + 0x5C,          // 0x10C - Size: 1 - Type: TWO_SHORT
+    PLAYER_VISIBLE_ITEM_2_PAD = UNIT_END + 0x5D,                 // 0x10D - Size: 1 - Type: INT
+    PLAYER_VISIBLE_ITEM_3_CREATOR = UNIT_END + 0x5E,             // 0x10E - Size: 2 - Type: GUID
+    PLAYER_VISIBLE_ITEM_3_0 = UNIT_END + 0x60,                   // 0x110 - Size: 8 - Type: INT
+    PLAYER_VISIBLE_ITEM_3_PROPERTIES = UNIT_END + 0x68,          // 0x118 - Size: 1 - Type: TWO_SHORT
+    PLAYER_VISIBLE_ITEM_3_PAD = UNIT_END + 0x69,                 // 0x119 - Size: 1 - Type: INT
+    PLAYER_VISIBLE_ITEM_4_CREATOR = UNIT_END + 0x6A,             // 0x11A - Size: 2 - Type: GUID
+    PLAYER_VISIBLE_ITEM_4_0 = UNIT_END + 0x6C,                   // 0x11C - Size: 8 - Type: INT
+    PLAYER_VISIBLE_ITEM_4_PROPERTIES = UNIT_END + 0x74,          // 0x124 - Size: 1 - Type: TWO_SHORT
+    PLAYER_VISIBLE_ITEM_4_PAD = UNIT_END + 0x75,                 // 0x125 - Size: 1 - Type: INT
+    PLAYER_VISIBLE_ITEM_5_CREATOR = UNIT_END + 0x76,             // 0x126 - Size: 2 - Type: GUID
+    PLAYER_VISIBLE_ITEM_5_0 = UNIT_END + 0x78,                   // 0x128 - Size: 8 - Type: INT
+    PLAYER_VISIBLE_ITEM_5_PROPERTIES = UNIT_END + 0x80,          // 0x130 - Size: 1 - Type: TWO_SHORT
+    PLAYER_VISIBLE_ITEM_5_PAD = UNIT_END + 0x81,                 // 0x131 - Size: 1 - Type: INT
+    PLAYER_VISIBLE_ITEM_6_CREATOR = UNIT_END + 0x82,             // 0x132 - Size: 2 - Type: GUID
+    PLAYER_VISIBLE_ITEM_6_0 = UNIT_END + 0x84,                   // 0x134 - Size: 8 - Type: INT
+    PLAYER_VISIBLE_ITEM_6_PROPERTIES = UNIT_END + 0x8C,          // 0x13C - Size: 1 - Type: TWO_SHORT
+    PLAYER_VISIBLE_ITEM_6_PAD = UNIT_END + 0x8D,                 // 0x13D - Size: 1 - Type: INT
+    PLAYER_VISIBLE_ITEM_7_CREATOR = UNIT_END + 0x8E,             // 0x13E - Size: 2 - Type: GUID
+    PLAYER_VISIBLE_ITEM_7_0 = UNIT_END + 0x90,                   // 0x140 - Size: 8 - Type: INT
+    PLAYER_VISIBLE_ITEM_7_PROPERTIES = UNIT_END + 0x98,          // 0x148 - Size: 1 - Type: TWO_SHORT
+    PLAYER_VISIBLE_ITEM_7_PAD = UNIT_END + 0x99,                 // 0x149 - Size: 1 - Type: INT
+    PLAYER_VISIBLE_ITEM_8_CREATOR = UNIT_END + 0x9A,             // 0x14A - Size: 2 - Type: GUID
+    PLAYER_VISIBLE_ITEM_8_0 = UNIT_END + 0x9C,                   // 0x14C - Size: 8 - Type: INT
+    PLAYER_VISIBLE_ITEM_8_PROPERTIES = UNIT_END + 0xA4,          // 0x154 - Size: 1 - Type: TWO_SHORT
+    PLAYER_VISIBLE_ITEM_8_PAD = UNIT_END + 0xA5,                 // 0x155 - Size: 1 - Type: INT
+    PLAYER_VISIBLE_ITEM_9_CREATOR = UNIT_END + 0xA6,             // 0x156 - Size: 2 - Type: GUID
+    PLAYER_VISIBLE_ITEM_9_0 = UNIT_END + 0xA8,                   // 0x158 - Size: 8 - Type: INT
+    PLAYER_VISIBLE_ITEM_9_PROPERTIES = UNIT_END + 0xB0,          // 0x160 - Size: 1 - Type: TWO_SHORT
+    PLAYER_VISIBLE_ITEM_9_PAD = UNIT_END + 0xB1,                 // 0x161 - Size: 1 - Type: INT
+    PLAYER_VISIBLE_ITEM_10_CREATOR = UNIT_END + 0xB2,            // 0x162 - Size: 2 - Type: GUID
+    PLAYER_VISIBLE_ITEM_10_0 = UNIT_END + 0xB4,                  // 0x164 - Size: 8 - Type: INT
+    PLAYER_VISIBLE_ITEM_10_PROPERTIES = UNIT_END + 0xBC,         // 0x16C - Size: 1 - Type: TWO_SHORT
+    PLAYER_VISIBLE_ITEM_10_PAD = UNIT_END + 0xBD,                // 0x16D - Size: 1 - Type: INT
+    PLAYER_VISIBLE_ITEM_11_CREATOR = UNIT_END + 0xBE,            // 0x16E - Size: 2 - Type: GUID
+    PLAYER_VISIBLE_ITEM_11_0 = UNIT_END + 0xC0,                  // 0x170 - Size: 8 - Type: INT
+    PLAYER_VISIBLE_ITEM_11_PROPERTIES = UNIT_END + 0xC8,         // 0x178 - Size: 1 - Type: TWO_SHORT
+    PLAYER_VISIBLE_ITEM_11_PAD = UNIT_END + 0xC9,                // 0x179 - Size: 1 - Type: INT
+    PLAYER_VISIBLE_ITEM_12_CREATOR = UNIT_END + 0xCA,            // 0x17A - Size: 2 - Type: GUID
+    PLAYER_VISIBLE_ITEM_12_0 = UNIT_END + 0xCC,                  // 0x17C - Size: 8 - Type: INT
+    PLAYER_VISIBLE_ITEM_12_PROPERTIES = UNIT_END + 0xD4,         // 0x184 - Size: 1 - Type: TWO_SHORT
+    PLAYER_VISIBLE_ITEM_12_PAD = UNIT_END + 0xD5,                // 0x185 - Size: 1 - Type: INT
+    PLAYER_VISIBLE_ITEM_13_CREATOR = UNIT_END + 0xD6,            // 0x186 - Size: 2 - Type: GUID
+    PLAYER_VISIBLE_ITEM_13_0 = UNIT_END + 0xD8,                  // 0x188 - Size: 8 - Type: INT
+    PLAYER_VISIBLE_ITEM_13_PROPERTIES = UNIT_END + 0xE0,         // 0x190 - Size: 1 - Type: TWO_SHORT
+    PLAYER_VISIBLE_ITEM_13_PAD = UNIT_END + 0xE1,                // 0x191 - Size: 1 - Type: INT
+    PLAYER_VISIBLE_ITEM_14_CREATOR = UNIT_END + 0xE2,            // 0x192 - Size: 2 - Type: GUID
+    PLAYER_VISIBLE_ITEM_14_0 = UNIT_END + 0xE4,                  // 0x194 - Size: 8 - Type: INT
+    PLAYER_VISIBLE_ITEM_14_PROPERTIES = UNIT_END + 0xEC,         // 0x19C - Size: 1 - Type: TWO_SHORT
+    PLAYER_VISIBLE_ITEM_14_PAD = UNIT_END + 0xED,                // 0x19D - Size: 1 - Type: INT
+    PLAYER_VISIBLE_ITEM_15_CREATOR = UNIT_END + 0xEE,            // 0x19E - Size: 2 - Type: GUID
+    PLAYER_VISIBLE_ITEM_15_0 = UNIT_END + 0xF0,                  // 0x1A0 - Size: 8 - Type: INT
+    PLAYER_VISIBLE_ITEM_15_PROPERTIES = UNIT_END + 0xF8,         // 0x1A8 - Size: 1 - Type: TWO_SHORT
+    PLAYER_VISIBLE_ITEM_15_PAD = UNIT_END + 0xF9,                // 0x1A9 - Size: 1 - Type: INT
+    PLAYER_VISIBLE_ITEM_16_CREATOR = UNIT_END + 0xFA,            // 0x1AA - Size: 2 - Type: GUID
+    PLAYER_VISIBLE_ITEM_16_0 = UNIT_END + 0xFC,                  // 0x1AC - Size: 8 - Type: INT
+    PLAYER_VISIBLE_ITEM_16_PROPERTIES = UNIT_END + 0x104,        // 0x1B4 - Size: 1 - Type: TWO_SHORT
+    PLAYER_VISIBLE_ITEM_16_PAD = UNIT_END + 0x105,               // 0x1B5 - Size: 1 - Type: INT
+    PLAYER_VISIBLE_ITEM_17_CREATOR = UNIT_END + 0x106,           // 0x1B6 - Size: 2 - Type: GUID
+    PLAYER_VISIBLE_ITEM_17_0 = UNIT_END + 0x108,                 // 0x1B8 - Size: 8 - Type: INT
+    PLAYER_VISIBLE_ITEM_17_PROPERTIES = UNIT_END + 0x110,        // 0x1C0 - Size: 1 - Type: TWO_SHORT
+    PLAYER_VISIBLE_ITEM_17_PAD = UNIT_END + 0x111,               // 0x1C1 - Size: 1 - Type: INT
+    PLAYER_VISIBLE_ITEM_18_CREATOR = UNIT_END + 0x112,           // 0x1C2 - Size: 2 - Type: GUID
+    PLAYER_VISIBLE_ITEM_18_0 = UNIT_END + 0x114,                 // 0x1C4 - Size: 8 - Type: INT
+    PLAYER_VISIBLE_ITEM_18_PROPERTIES = UNIT_END + 0x11C,        // 0x1CC - Size: 1 - Type: TWO_SHORT
+    PLAYER_VISIBLE_ITEM_18_PAD = UNIT_END + 0x11D,               // 0x1CD - Size: 1 - Type: INT
+    PLAYER_VISIBLE_ITEM_19_CREATOR = UNIT_END + 0x11E,           // 0x1CE - Size: 2 - Type: GUID
+    PLAYER_VISIBLE_ITEM_19_0 = UNIT_END + 0x120,                 // 0x1D0 - Size: 8 - Type: INT
+    PLAYER_VISIBLE_ITEM_19_PROPERTIES = UNIT_END + 0x128,        // 0x1D8 - Size: 1 - Type: TWO_SHORT
+    PLAYER_VISIBLE_ITEM_19_PAD = UNIT_END + 0x129,               // 0x1D9 - Size: 1 - Type: INT
+    PLAYER_FIELD_INV_SLOT_HEAD = UNIT_END + 0x12A,               // 0x1DA - Size: 46 - Type: GUID
+    PLAYER_FIELD_PACK_SLOT_1 = UNIT_END + 0x158,                 // 0x208 - Size: 32 - Type: GUID
+    PLAYER_FIELD_BANK_SLOT_1 = UNIT_END + 0x178,                 // 0x228 - Size: 48 - Type: GUID
+    PLAYER_FIELD_BANKBAG_SLOT_1 = UNIT_END + 0x1A8,              // 0x258 - Size: 12 - Type: GUID
+    PLAYER_FIELD_VENDORBUYBACK_SLOT_1 = UNIT_END + 0x1B4,        // 0x264 - Size: 24 - Type: GUID
+    PLAYER_FIELD_KEYRING_SLOT_1 = UNIT_END + 0x1CC,              // 0x27C - Size: 64 - Type: GUID
+    PLAYER_FARSIGHT = UNIT_END + 0x20C,                          // 0x2BC - Size: 2 - Type: GUID
+    PLAYER_FIELD_COMBO_TARGET = UNIT_END + 0x20E,                // 0x2BE - Size: 2 - Type: GUID
+    PLAYER_XP = UNIT_END + 0x210,                                // 0x2C0 - Size: 1 - Type: INT
+    PLAYER_NEXT_LEVEL_XP = UNIT_END + 0x211,                     // 0x2C1 - Size: 1 - Type: INT
+    PLAYER_SKILL_INFO_1_1 = UNIT_END + 0x212,                    // 0x2C2 - Size: 384 - Type: TWO_SHORT
+    PLAYER_CHARACTER_POINTS1 = UNIT_END + 0x392,                 // 0x442 - Size: 1 - Type: INT
+    PLAYER_CHARACTER_POINTS2 = UNIT_END + 0x393,                 // 0x443 - Size: 1 - Type: INT
+    PLAYER_TRACK_CREATURES = UNIT_END + 0x394,                   // 0x444 - Size: 1 - Type: INT
+    PLAYER_TRACK_RESOURCES = UNIT_END + 0x395,                   // 0x445 - Size: 1 - Type: INT
+    PLAYER_BLOCK_PERCENTAGE = UNIT_END + 0x396,                  // 0x446 - Size: 1 - Type: FLOAT
+    PLAYER_DODGE_PERCENTAGE = UNIT_END + 0x397,                  // 0x447 - Size: 1 - Type: FLOAT
+    PLAYER_PARRY_PERCENTAGE = UNIT_END + 0x398,                  // 0x448 - Size: 1 - Type: FLOAT
+    PLAYER_CRIT_PERCENTAGE = UNIT_END + 0x399,                   // 0x449 - Size: 1 - Type: FLOAT
+    PLAYER_RANGED_CRIT_PERCENTAGE = UNIT_END + 0x39A,            // 0x44A - Size: 1 - Type: FLOAT
+    PLAYER_EXPLORED_ZONES_1 = UNIT_END + 0x39B,                  // 0x44B - Size: 64 - Type: BYTES
+    PLAYER_REST_STATE_EXPERIENCE = UNIT_END + 0x3DB,             // 0x48B - Size: 1 - Type: INT
+    PLAYER_FIELD_COINAGE = UNIT_END + 0x3DC,                     // 0x48C - Size: 1 - Type: INT
+    PLAYER_FIELD_POSSTAT0 = UNIT_END + 0x3DD,                    // 0x48D - Size: 1 - Type: INT
+    PLAYER_FIELD_POSSTAT1 = UNIT_END + 0x3DE,                    // 0x48E - Size: 1 - Type: INT
+    PLAYER_FIELD_POSSTAT2 = UNIT_END + 0x3DF,                    // 0x48F - Size: 1 - Type: INT
+    PLAYER_FIELD_POSSTAT3 = UNIT_END + 0x3E0,                    // 0x490 - Size: 1 - Type: INT
+    PLAYER_FIELD_POSSTAT4 = UNIT_END + 0x3E1,                    // 0x491 - Size: 1 - Type: INT
+    PLAYER_FIELD_NEGSTAT0 = UNIT_END + 0x3E2,                    // 0x492 - Size: 1 - Type: INT
+    PLAYER_FIELD_NEGSTAT1 = UNIT_END + 0x3E3,                    // 0x493 - Size: 1 - Type: INT
+    PLAYER_FIELD_NEGSTAT2 = UNIT_END + 0x3E4,                    // 0x494 - Size: 1 - Type: INT
+    PLAYER_FIELD_NEGSTAT3 = UNIT_END + 0x3E5,                    // 0x495 - Size: 1 - Type: INT
+    PLAYER_FIELD_NEGSTAT4 = UNIT_END + 0x3E6,                    // 0x496 - Size: 1 - Type: INT
+    PLAYER_FIELD_RESISTANCEBUFFMODSPOSITIVE = UNIT_END + 0x3E7,  // 0x497 - Size: 7 - Type: INT
+    PLAYER_FIELD_RESISTANCEBUFFMODSNEGATIVE = UNIT_END + 0x3EE,  // 0x49E - Size: 7 - Type: INT
+    PLAYER_FIELD_MOD_DAMAGE_DONE_POS = UNIT_END + 0x3F5,         // 0x4A5 - Size: 7 - Type: INT
+    PLAYER_FIELD_MOD_DAMAGE_DONE_NEG = UNIT_END + 0x3FC,         // 0x4AC - Size: 7 - Type: INT
+    PLAYER_FIELD_MOD_DAMAGE_DONE_PCT = UNIT_END + 0x403,         // 0x4B3 - Size: 7 - Type: INT
+    PLAYER_FIELD_BYTES = UNIT_END + 0x40A,                       // 0x4BA - Size: 1 - Type: BYTES
+    PLAYER_AMMO_ID = UNIT_END + 0x40B,                           // 0x4BB - Size: 1 - Type: INT
+    PLAYER_SELF_RES_SPELL = UNIT_END + 0x40C,                    // 0x4BC - Size: 1 - Type: INT
+    PLAYER_FIELD_PVP_MEDALS = UNIT_END + 0x40D,                  // 0x4BD - Size: 1 - Type: INT
+    PLAYER_FIELD_BUYBACK_PRICE_1 = UNIT_END + 0x40E,             // 0x4BE - Size: 12 - Type: INT
+    PLAYER_FIELD_BUYBACK_TIMESTAMP_1 = UNIT_END + 0x41A,         // 0x4CA - Size: 12 - Type: INT
+    PLAYER_FIELD_SESSION_KILLS = UNIT_END + 0x426,               // 0x4D6 - Size: 1 - Type: TWO_SHORT
+    PLAYER_FIELD_YESTERDAY_KILLS = UNIT_END + 0x427,             // 0x4D7 - Size: 1 - Type: TWO_SHORT
+    PLAYER_FIELD_LAST_WEEK_KILLS = UNIT_END + 0x428,             // 0x4D8 - Size: 1 - Type: TWO_SHORT
+    PLAYER_FIELD_THIS_WEEK_KILLS = UNIT_END + 0x429,             // 0x4D9 - Size: 1 - Type: TWO_SHORT
+    PLAYER_FIELD_THIS_WEEK_CONTRIBUTION = UNIT_END + 0x42A,      // 0x4DA - Size: 1 - Type: INT
+    PLAYER_FIELD_LIFETIME_HONORBALE_KILLS = UNIT_END + 0x42B,    // 0x4DB - Size: 1 - Type: INT
     PLAYER_FIELD_LIFETIME_DISHONORBALE_KILLS = UNIT_END + 0x42C, // 0x4DC - Size: 1 - Type: INT
     PLAYER_FIELD_YESTERDAY_CONTRIBUTION = UNIT_END + 0x42D,      // 0x4DD - Size: 1 - Type: INT
     PLAYER_FIELD_LAST_WEEK_CONTRIBUTION = UNIT_END + 0x42E,      // 0x4DE - Size: 1 - Type: INT
@@ -489,7 +491,11 @@ enum ECorpseFields {
     CORPSE_END = OBJECT_END + 0x20                  // 0x026
 };
 
-enum Gender : uint8_t { GENDER_MALE = 0, GENDER_FEMALE = 1, GENDER_NONE = 2 };
+enum Gender : uint8_t {
+    GENDER_MALE = 0,
+    GENDER_FEMALE = 1,
+    GENDER_NONE = 2
+};
 
 enum Races : uint8_t {
     RACE_HUMAN = 1,
@@ -523,8 +529,8 @@ enum RacialModel {
     MODEL_GNOME_FEMALE = 1564,
     MODEL_GOBLIN_MALE = 6894,
     MODEL_GOBLIN_FEMALE = 6895,
-    MODEL_HELF_FEMALE = 15475,
-    MODEL_HELF_MALE = 15476,
+    MODEL_HELF_FEMALE = 15'475,
+    MODEL_HELF_MALE = 15'476,
 };
 
 struct C2Vector {
@@ -564,8 +570,8 @@ struct Rectangle {
 };
 
 struct TSLink {
-    void *prevLink;
-    void *next;
+    void* prevLink;
+    void* next;
 };
 
 struct CGObject_C;
@@ -579,22 +585,22 @@ struct CGObject_Data {
 };
 
 struct CGObject_C_VfTable {
-    void *unk0[5];
-    C3Vector *(__thiscall *GetPosition)(CGObject_C *, C3Vector *);
-    void *unk1[22];
-    const char *(__thiscall *GetName)(CGObject_C *);
+    void* unk0[5];
+    C3Vector*(__thiscall* GetPosition)(CGObject_C*, C3Vector*);
+    void* unk1[22];
+    const char*(__thiscall* GetName)(CGObject_C*);
 };
 
 struct CGObject_C {
-    CGObject_C_VfTable *vftable;
-    void *m_unk0;
-    CGObject_Data *m_data;
-    void *m_unk1[2];
+    CGObject_C_VfTable* vftable;
+    void* m_unk0;
+    CGObject_Data* m_data;
+    void* m_unk1[2];
     uint32_t m_objectType;
-    void *m_unk2[6];
+    void* m_unk2[6];
     uint64_t m_guid; // 0x30
-    void *m_unk3[42];
-    CWorld *m_worldData; // 0xE0
+    void* m_unk3[42];
+    CWorld* m_worldData; // 0xE0
 };
 
 struct ItemEnchantment {
@@ -708,15 +714,15 @@ struct CGUnitData {
 };
 
 struct CGUnit_C {
-    CGObject_C_VfTable *vftable;
-    void *m_unk0;
-    CGUnitData *m_data;
-    void *m_unk1[2];
+    CGObject_C_VfTable* vftable;
+    void* m_unk0;
+    CGUnitData* m_data;
+    void* m_unk1[2];
     uint32_t m_objectType;
-    void *m_unk2[6];
+    void* m_unk2[6];
     uint64_t m_guid; // 0x30
-    void *m_unk3[42];
-    CWorld *m_worldData; // 0xE0
+    void* m_unk3[42];
+    CWorld* m_worldData; // 0xE0
 };
 
 struct QuestLogEntry {
@@ -797,15 +803,15 @@ struct CGPlayerData {
 };
 
 struct CGPlayer_C {
-    CGObject_C_VfTable *vftable;
-    void *m_unk0;
-    CGPlayerData *m_data;
-    void *m_unk1[2];
+    CGObject_C_VfTable* vftable;
+    void* m_unk0;
+    CGPlayerData* m_data;
+    void* m_unk1[2];
     uint32_t m_objectType;
-    void *m_unk2[6];
+    void* m_unk2[6];
     uint64_t m_guid; // 0x30
-    void *m_unk3[42];
-    CWorld *m_worldData; // 0xE0
+    void* m_unk3[42];
+    CWorld* m_worldData; // 0xE0
 };
 
 struct CGGameObjectData {
@@ -862,17 +868,17 @@ struct TexCoord {
 struct CGMinimapFrame_FrameScriptPart;
 
 struct CGMinimapFrame_FrameScriptPartVfTable {
-    void *unk[7];
-    float(__thiscall *GetUnkScale)(CGMinimapFrame_FrameScriptPart *);
+    void* unk[7];
+    float(__thiscall* GetUnkScale)(CGMinimapFrame_FrameScriptPart*);
 };
 
 struct CGMinimapFrame_LayoutPart {
-    struct CGMinimapFrame_CLayoutFramePartVfTable *vftable;
-    void *m_unk[8];
+    struct CGMinimapFrame_CLayoutFramePartVfTable* vftable;
+    void* m_unk[8];
 };
 
 struct CGMinimapFrame_FrameScriptPart {
-    CGMinimapFrame_FrameScriptPartVfTable *vftable;
+    CGMinimapFrame_FrameScriptPartVfTable* vftable;
 };
 
 struct CGMinimapFrame {
@@ -895,19 +901,19 @@ struct DNInfo {
 };
 
 struct MINIMAPINFO {
-    void *unk0;
+    void* unk0;
     uint32_t wmoID;
     uint32_t mapObjID;
     C3Vector currentPos;
     float radius;
     float layoutScale;
-    CGMinimapFrame *minimapFrame;
+    CGMinimapFrame* minimapFrame;
 };
 
 struct ItemStats_C {
     uint32_t m_class;
     uint32_t m_subClass;
-    char *m_name[4];
+    char* m_name[4];
     uint32_t m_displayInfoID;
     uint32_t m_quality;
     uint32_t m_flags;
@@ -950,7 +956,7 @@ struct ItemStats_C {
     uint32_t m_spellCategory[5];
     uint32_t m_spellCategoryCooldown[5];
     uint32_t m_bonding;
-    char *m_description;
+    char* m_description;
     uint32_t m_pageText;
     uint32_t m_languageID;
     uint32_t m_pageMaterial;
@@ -968,36 +974,46 @@ struct ItemStats_C {
 };
 
 struct STATUSENTRY {
-    const char *text;
+    const char* text;
     STATUS_TYPE severity;
     TSLink link;
 };
 
 struct CStatus {
-    void *vftable;
-    uint32_t m_unk; // Seems to always be set to 8
+    void* vftable;
+    uint32_t m_unk{8}; // Seems to always be set to 8
     TSLink m_head;
-    STATUS_TYPE m_maxSeverity;
+    STATUS_TYPE m_maxSeverity{STATUS_TYPE::STATUS_INFO};
 
     CStatus();
     ~CStatus();
 
-    [[nodiscard]] bool ok() const { return m_maxSeverity < STATUS_TYPE::STATUS_ERROR; }
+    [[nodiscard]]
+    auto ok() const -> bool {
+        return m_maxSeverity < STATUS_TYPE::STATUS_ERROR;
+    }
 };
 
 struct CGxTexFlags {
-    uint32_t m_filter : 3;
-    uint32_t m_wrapU : 1;
-    uint32_t m_wrapV : 1;
-    uint32_t m_forceMipTracking : 1;
-    uint32_t m_generateMipMaps : 1;
-    uint32_t m_renderTarget : 1;
-    uint32_t m_unknownFlag : 1;
-    uint32_t m_maxAnisotropy : 5;
+    uint32_t m_filter : 3{};
+    uint32_t m_wrapU : 1{};
+    uint32_t m_wrapV : 1{};
+    uint32_t m_forceMipTracking : 1{};
+    uint32_t m_generateMipMaps : 1{};
+    uint32_t m_renderTarget : 1{};
+    uint32_t m_unknownFlag : 1{};
+    uint32_t m_maxAnisotropy : 5{};
 
-    CGxTexFlags(EGxTexFilter filter, uint32_t wrapU, uint32_t wrapV, uint32_t forceMipTracking,
-                uint32_t generateMipMaps, uint32_t renderTarget, uint32_t maxAnisotropy,
-                uint32_t unknownFlag);
+    CGxTexFlags(
+        EGxTexFilter filter,
+        uint32_t wrapU,
+        uint32_t wrapV,
+        uint32_t forceMipTracking,
+        uint32_t generateMipMaps,
+        uint32_t renderTarget,
+        uint32_t maxAnisotropy,
+        uint32_t unknownFlag
+    );
 };
 
 struct FactionTemplate {
@@ -1011,27 +1027,28 @@ struct FactionTemplate {
     int m_friend[4];
 };
 
-template <typename T> struct WowClientDB {
-    T *m_records;
+template <typename T>
+struct WowClientDB {
+    T* m_records;
     int m_numRecords;
-    T **m_recordsById;
+    T** m_recordsById;
     int m_maxId;
     int m_loaded;
 };
 
 namespace Lua {
-using lua_pushnil_t = void(__fastcall *)(void *L);
-using lua_isnumber_t = bool(__fastcall *)(void *L, int index);
-using lua_tonumber_t = double(__fastcall *)(void *L, int index);
-using lua_pushnumber_t = void(__fastcall *)(void *L, double value);
-using lua_isstring_t = bool(__fastcall *)(void *L, int index);
-using lua_tostring_t = const char *(__fastcall *)(void *L, int index);
-using lua_pushstring_t = void(__fastcall *)(void *L, const char *);
-using lua_gettable_t = void(__fastcall *)(void *L, int index);
-using lua_type_t = int(__fastcall *)(void *L, int index);
-using lua_next_t = int(__fastcall *)(void *L, int index);
-using lua_settop_t = void(__fastcall *)(void *L, int index);
-using lua_error_t = void(__cdecl *)(void *L, const char *);
+using lua_pushnil_t = void(__fastcall*)(void* L);
+using lua_isnumber_t = bool(__fastcall*)(void* L, int index);
+using lua_tonumber_t = double(__fastcall*)(void* L, int index);
+using lua_pushnumber_t = void(__fastcall*)(void* L, double value);
+using lua_isstring_t = bool(__fastcall*)(void* L, int index);
+using lua_tostring_t = const char*(__fastcall*)(void* L, int index);
+using lua_pushstring_t = void(__fastcall*)(void* L, const char*);
+using lua_gettable_t = void(__fastcall*)(void* L, int index);
+using lua_type_t = int(__fastcall*)(void* L, int index);
+using lua_next_t = int(__fastcall*)(void* L, int index);
+using lua_settop_t = void(__fastcall*)(void* L, int index);
+using lua_error_t = void(__cdecl*)(void* L, const char*);
 
 extern lua_pushnil_t PushNil;
 extern lua_isnumber_t IsNumber;
@@ -1046,79 +1063,108 @@ extern lua_next_t Next;
 extern lua_settop_t SetTop;
 extern lua_error_t Error;
 
-inline bool IsTable(void *L, int index) { return Type(L, index) == 5; }
-inline void Pop(void *L, int index) { SetTop(L, -(index)-1); }
+inline auto IsTable(void* L, int index) -> bool {
+    return Type(L, index) == 5;
+}
+inline void Pop(void* L, int index) {
+    SetTop(L, -(index)-1);
+}
 } // namespace Lua
 
-using FrameScript_RegisterFunction_t = void(__fastcall *)(const char *name, uintptr_t func);
-using LoadScriptFunctions_t = void(__fastcall *)();
-using GetGUIDFromName_t = uint64_t(__fastcall *)(const char *unitName);
-using ClntObjMgrObjectPtr_t = CGObject_C *(__fastcall *)(uint32_t typeMask,
-                                                         const char *debugMessage, uint64_t guid,
-                                                         int debugCode);
-using RenderObjectBlips_t = void(__thiscall *)(CGMinimapFrame *thisptr, DNInfo *dnInfo);
-using GxTexOwnerUpdate_t = int(__thiscall *)(void *pThis, void *entry, void *bounds, void *notify);
-using TextureGetGxTex_t = CGxTex *(__fastcall *)(HTEXTURE__ * texture, int, CStatus *status);
-using TextureDestroy_t = void(__cdecl *)();
-using GxRsSet_t = void(__fastcall *)(EGxRenderState, CGxTex *);
-using GxPrimLockVertexPtrs_t = void(__fastcall *)(uint32_t, C3Vector *, uint32_t, C3Vector *,
-                                                  uint32_t, const CImVector *, uint32_t,
-                                                  unsigned char *, uint32_t, C2Vector *, uint32_t,
-                                                  C2Vector *, uint32_t);
-using GxPrimDrawElements_t = void(__fastcall *)(EGxPrim, uint32_t, unsigned short *);
-using GxPrimUnlockVertexPtrs_t = void(__fastcall *)();
-using CStatus_Destructor_t = void(__thiscall *)(CStatus *thisptr);
-using CGxTexFlags_Constructor_t =
-    uint32_t *(__thiscall *)(void *thisptr, uint32_t filter, uint32_t wrapU, uint32_t wrapV,
-                             uint32_t forceMipTracking, uint32_t generateMipMaps,
-                             uint32_t renderTarget, uint32_t maxAnisotropy, uint32_t unknownFlag);
-using TextureCreate_t = HTEXTURE__ *(__fastcall *)(const char *filename, CStatus *status,
-                                                   CGxTexFlags texFlags, int unkParam1,
-                                                   int unkParam2);
-using WorldPosToMinimapFrameCoords_t = C2Vector *(__fastcall *)(C2Vector * out, void *edx,
-                                                                C3Vector cur, float worldRadius,
-                                                                float worldX, float worldY,
-                                                                float layoutScale, float unkScale);
-using ObjectEnumProc_t = int(__fastcall *)(MINIMAPINFO *info, uint64_t guid);
-using ClntObjMgrEnumVisibleObjectsCallback_t = bool(__fastcall *)(void *context, void *edx,
-                                                                  uint64_t guid);
+using FrameScript_RegisterFunction_t = void(__fastcall*)(const char* name, uintptr_t func);
+using LoadScriptFunctions_t = void(__fastcall*)();
+using GetGUIDFromName_t = uint64_t(__fastcall*)(const char* unitName);
+using ClntObjMgrObjectPtr_t = CGObject_C*(__fastcall*)(uint32_t typeMask,
+                                                       const char* debugMessage,
+                                                       uint64_t guid,
+                                                       int debugCode);
+using RenderObjectBlips_t = void(__thiscall*)(CGMinimapFrame* thisptr, DNInfo* dnInfo);
+using GxTexOwnerUpdate_t = int(__thiscall*)(void* pThis, void* entry, void* bounds, void* notify);
+using TextureGetGxTex_t = CGxTex*(__fastcall*)(HTEXTURE__ * texture, int, CStatus* status);
+using TextureDestroy_t = void(__cdecl*)();
+using GxRsSet_t = void(__fastcall*)(EGxRenderState, CGxTex*);
+using GxPrimLockVertexPtrs_t = void(__fastcall*)(
+    uint32_t,
+    C3Vector*,
+    uint32_t,
+    C3Vector*,
+    uint32_t,
+    const CImVector*,
+    uint32_t,
+    unsigned char*,
+    uint32_t,
+    C2Vector*,
+    uint32_t,
+    C2Vector*,
+    uint32_t
+);
+using GxPrimDrawElements_t = void(__fastcall*)(EGxPrim, uint32_t, unsigned short*);
+using GxPrimUnlockVertexPtrs_t = void(__fastcall*)();
+using CStatus_Destructor_t = void(__thiscall*)(CStatus* thisptr);
+using CGxTexFlags_Constructor_t = uint32_t*(__thiscall*)(void* thisptr,
+                                                         uint32_t filter,
+                                                         uint32_t wrapU,
+                                                         uint32_t wrapV,
+                                                         uint32_t forceMipTracking,
+                                                         uint32_t generateMipMaps,
+                                                         uint32_t renderTarget,
+                                                         uint32_t maxAnisotropy,
+                                                         uint32_t unknownFlag);
+using TextureCreate_t =
+    HTEXTURE__*(__fastcall*)(const char* filename, CStatus* status, CGxTexFlags texFlags, int unkParam1, int unkParam2);
+using WorldPosToMinimapFrameCoords_t = C2Vector*(__fastcall*)(C2Vector * out,
+                                                              void* edx,
+                                                              C3Vector cur,
+                                                              float worldRadius,
+                                                              float worldX,
+                                                              float worldY,
+                                                              float layoutScale,
+                                                              float unkScale);
+using ObjectEnumProc_t = int(__fastcall*)(MINIMAPINFO* info, uint64_t guid);
+using ClntObjMgrEnumVisibleObjectsCallback_t = bool(__fastcall*)(void* context, void* edx, uint64_t guid);
 using ClntObjMgrEnumVisibleObjects_t =
-    bool(__fastcall *)(ClntObjMgrEnumVisibleObjectsCallback_t callback, void *context);
-using SStrPack_t = int(__stdcall *)(char *dst, const char *src, int cap);
-using InvalidFunctionPtrCheck_t = void(__fastcall *)(void *target);
-using CWorld_QueryMapObjIDs_t = bool(__fastcall *)(CWorld *thisptr, uint32_t *outWmoID,
-                                                   uint32_t *outMapObjID, uint32_t *outGroupNum);
-using ClntObjMgrGetActivePlayer_t = uint64_t(__fastcall *)();
-using CGUnit_C_CanAssist_t = bool(__thiscall *)(CGUnit_C *thisptr, CGUnit_C *other);
-using FrameScript_Initialize_t = bool(__fastcall *)();
-using FrameScript_Execute_t = bool(__fastcall *)(const char *script, const char *scriptName);
-using CVar_Callback_t = bool(__fastcall *)(void *CVar, const char *oldValue, const char *newValue,
-                                           void *userData);
-using CVar_Register_t = void(__fastcall *)(const char *name, const char *help, uint32_t flags,
-                                           const char *defaultValue, CVar_Callback_t callback,
-                                           CVAR_CATEGORY category, bool consoleOnly,
-                                           void *userData);
-using InitializeGlobal_t = bool(__fastcall *)();
-using CGUnit_C_CreateUnitMount_t = void(__thiscall *)(CGUnit_C *thisptr);
-using CGUnit_C_RefreshMount_t = void(__thiscall *)(CGUnit_C *thisptr, bool reset);
-using TextureBlit_t = void(__stdcall *)(void *, void *, Point *offset0, Point *offset1,
-                                        Rectangle *copy, Rectangle *extent);
-using SFile_Open_t = uint64_t(__stdcall *)(const char *filename, SFile **outFile);
-using SFile_Read_t = uint64_t(__stdcall *)(SFile *file, void *buffer, uint32_t bytesToRead,
-                                           uint32_t *bytesRead, void *reserved1, void *reserved2);
-using SFile_Close_t = uint64_t(__stdcall *)(SFile *file);
-using CGObject_C_SetBlock_t = int(__thiscall *)(Game::CGObject_C *thisptr, uint32_t fieldIndex,
-                                                uint32_t value);
-using CGUnit_C_UpdateDisplayInfo_t = void(__thiscall *)(Game::CGUnit_C *thisptr);
-using CGUnit_C_Destructor_t = void(__thiscall *)(Game::CGUnit_C *thisptr);
-using CGGameUI_Shutdown_t = void(__fastcall *)();
-using DBCache_ItemStats_C_GetRecord_t =
-    Game::ItemStats_C *(__thiscall *)(void *dbCache, uint32_t itemID, const uint64_t *guid,
-                                      void *callback, void *userData, bool requestIfMissing);
-using SMemAllocInternal_t = void *(__thiscall *)(void *thisptr, uint32_t sizeClass, uint32_t size,
-                                                 uint32_t commit);
-using SMemReallocInternal_t = void *(__thiscall *)(void *thisptr, void *blk, uint32_t sizeClass,
-                                                   uint32_t size);
+    bool(__fastcall*)(ClntObjMgrEnumVisibleObjectsCallback_t callback, void* context);
+using SStrPack_t = int(__stdcall*)(char* dst, const char* src, int cap);
+using InvalidFunctionPtrCheck_t = void(__fastcall*)(void* target);
+using CWorld_QueryMapObjIDs_t =
+    bool(__fastcall*)(CWorld* thisptr, uint32_t* outWmoID, uint32_t* outMapObjID, uint32_t* outGroupNum);
+using ClntObjMgrGetActivePlayer_t = uint64_t(__fastcall*)();
+using CGUnit_C_CanAssist_t = bool(__thiscall*)(CGUnit_C* thisptr, CGUnit_C* other);
+using FrameScript_Initialize_t = bool(__fastcall*)();
+using FrameScript_Execute_t = bool(__fastcall*)(const char* script, const char* scriptName);
+using CVar_Callback_t = bool(__fastcall*)(void* CVar, const char* oldValue, const char* newValue, void* userData);
+using CVar_Register_t = void(__fastcall*)(
+    const char* name,
+    const char* help,
+    uint32_t flags,
+    const char* defaultValue,
+    CVar_Callback_t callback,
+    CVAR_CATEGORY category,
+    bool consoleOnly,
+    void* userData
+);
+using InitializeGlobal_t = bool(__fastcall*)();
+using CGUnit_C_CreateUnitMount_t = void(__thiscall*)(CGUnit_C* thisptr);
+using CGUnit_C_RefreshMount_t = void(__thiscall*)(CGUnit_C* thisptr, bool reset);
+using TextureBlit_t =
+    void(__stdcall*)(void*, void*, Point* offset0, Point* offset1, Rectangle* copy, Rectangle* extent);
+using SFile_Open_t = uint64_t(__stdcall*)(const char* filename, SFile** outFile);
+using SFile_Read_t = uint64_t(__stdcall*)(
+    SFile* file, void* buffer, uint32_t bytesToRead, uint32_t* bytesRead, void* reserved1, void* reserved2
+);
+using SFile_Close_t = uint64_t(__stdcall*)(SFile* file);
+using CGObject_C_SetBlock_t = int(__thiscall*)(Game::CGObject_C* thisptr, uint32_t fieldIndex, uint32_t value);
+using CGUnit_C_UpdateDisplayInfo_t = void(__thiscall*)(Game::CGUnit_C* thisptr);
+using CGUnit_C_Destructor_t = void(__thiscall*)(Game::CGUnit_C* thisptr);
+using CGGameUI_Shutdown_t = void(__fastcall*)();
+using DBCache_ItemStats_C_GetRecord_t = Game::ItemStats_C*(__thiscall*)(void* dbCache,
+                                                                        uint32_t itemID,
+                                                                        const uint64_t* guid,
+                                                                        void* callback,
+                                                                        void* userData,
+                                                                        bool requestIfMissing);
+using SMemAllocInternal_t = void*(__thiscall*)(void* thisptr, uint32_t sizeClass, uint32_t size, uint32_t commit);
+using SMemReallocInternal_t = void*(__thiscall*)(void* thisptr, void* blk, uint32_t sizeClass, uint32_t size);
 
 extern FrameScript_RegisterFunction_t FrameScript_RegisterFunction;
 extern GetGUIDFromName_t GetGUIDFromName;
@@ -1147,25 +1193,28 @@ extern SFile_Close_t SFile_Close;
 extern CGUnit_C_UpdateDisplayInfo_t CGUnit_C_UpdateDisplayInfo;
 extern DBCache_ItemStats_C_GetRecord_t DBCache_ItemStats_C_GetRecord;
 
-void DrawMinimapTexture(HTEXTURE__ *texture, C2Vector minimapPosition, float scale, bool gray);
+void DrawMinimapTexture(HTEXTURE__* texture, C2Vector minimapPosition, float scale, bool gray);
 
-template <typename T> inline const T *DbLookupById(const WowClientDB<T> &db, int id) {
-    if (!db.m_loaded || !db.m_recordsById)
+template <typename T>
+inline auto DbLookupById(const WowClientDB<T>& db, int id) -> const T* {
+    if (!db.m_loaded || !db.m_recordsById) {
         return nullptr;
+    }
 
-    if (id < 0 || id > db.m_maxId)
+    if (id < 0 || id > db.m_maxId) {
         return nullptr;
+    }
 
     return db.m_recordsById[id];
 }
 
-extern C3Vector *s_blipVertices;
-extern TexCoord *texCoords;
-extern C3Vector *normal;
-extern unsigned short *vertIndices;
-extern const float *BLIP_HALF;
-extern const WowClientDB<FactionTemplate> *g_factionTemplateDB;
-extern void **g_itemDBCache;
+extern C3Vector* s_blipVertices;
+extern TexCoord* texCoords;
+extern C3Vector* normal;
+extern unsigned short* vertIndices;
+extern const float* BLIP_HALF;
+extern const WowClientDB<FactionTemplate>* g_factionTemplateDB;
+extern void** g_itemDBCache;
 
 // Initialize all function pointers and data pointers from Offsets::.
 // Must be called after Offsets::LoadFromFile() and before any hook installation.

@@ -2,11 +2,11 @@
 // SharedMemory.h - Manages the shared memory region between the 64-bit
 // texture server and the 32-bit WoW client.
 
-#include <cstdint>
-#include <array>
-
 #include "../../shared/Protocol.h"
 #include "WinHandle.h"
+
+#include <array>
+#include <cstdint>
 
 namespace TexServer {
 
@@ -17,31 +17,31 @@ public:
 
     // Non-copyable, non-movable.
     SharedMemory(const SharedMemory&) = delete;
-    SharedMemory& operator=(const SharedMemory&) = delete;
+    auto operator=(const SharedMemory&) -> SharedMemory& = delete;
 
     /// Create the shared memory mapping and initialize the header.
-    bool Create();
+    auto Create() -> bool;
 
     /// Unmap and close all handles.
     void Destroy();
 
     /// Returns true if the mapping is valid and usable.
-    bool IsValid() const;
+    [[nodiscard]] auto IsValid() const -> bool;
 
     /// Access the global header at offset 0.
-    TexProto::ShmHeader* GetHeader();
+    auto GetHeader() -> TexProto::ShmHeader*;
 
     /// Access the slot header for the given slot index (bounds-checked).
     /// Returns nullptr if slot is out of range.
-    TexProto::SlotHeader* GetSlotHeader(int32_t slot);
+    auto GetSlotHeader(int32_t slot) -> TexProto::SlotHeader*;
 
     /// Access the data region for the given slot index (bounds-checked).
     /// Returns nullptr if slot is out of range.
-    uint8_t* GetSlotData(int32_t slot);
+    auto GetSlotData(int32_t slot) -> uint8_t*;
 
     /// Atomically allocate a free slot (state 0 -> 1).
     /// Returns the slot index, or -1 if all slots are in use.
-    int32_t AllocateSlot();
+    auto AllocateSlot() -> int32_t;
 
     /// Mark a slot as ready for client consumption (state -> 2)
     /// and increment the global sequence counter.
@@ -53,10 +53,10 @@ public:
 private:
     // Declaration order matters: views must appear AFTER their handles so that
     // the destructor (reverse order) unmaps views before closing handles.
-    UniqueHandle<>  m_hHeaderMapping;
-    UniqueMapView   m_pHeaderBase;
-    std::array<UniqueHandle<>, TexProto::SHM_WINDOW_COUNT>  m_hDataMappings;
-    std::array<UniqueMapView, TexProto::SHM_WINDOW_COUNT>   m_pDataBases;
+    UniqueHandle<> m_hHeaderMapping;
+    UniqueMapView m_pHeaderBase;
+    std::array<UniqueHandle<>, TexProto::SHM_WINDOW_COUNT> m_hDataMappings;
+    std::array<UniqueMapView, TexProto::SHM_WINDOW_COUNT> m_pDataBases;
 };
 
 } // namespace TexServer

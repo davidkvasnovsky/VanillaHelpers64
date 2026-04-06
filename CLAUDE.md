@@ -42,7 +42,7 @@ Pass `-DVANILLAHELPERS_TAG=vMAJOR.MINOR.PATCH` to cmake. Encodes as `MAJOR*10000
 
 ### Clean rebuild
 
-No cmake clean target. Delete build directories: `rm -rf build build-server`
+No cmake clean target. Delete build directories: `rm -rf build build-server build-tidy build-tidy-dll`
 
 ### Debug builds
 
@@ -107,7 +107,7 @@ WoW.exe ← VanillaHelpers.dll (32-bit, MinHook)
 
 - **Request** (8 bytes packed): cmd, priority, path_len, data_size — followed by path + raw file bytes
 - **Response** (19 bytes packed): status, slot_id, width, height, data_size, pixel_format, mip_levels
-- **Slot states**: EMPTY→READING→DECODING→READY→UPLOADED→EMPTY (volatile uint32_t, lock-free polling)
+- **Slot states**: EMPTY→READING→DECODING→READY→UPLOADED, then server-side reclaim to READING. Uploaded slots are reusable immediately; stale Ready slots are reclaimed after a 5s timeout via `ready_tick`. (`volatile uint32_t`, lock-free polling)
 - **Path hash**: FNV-1a with slash normalization (`/`→`\`) and case folding
 
 ### Initialization sequence (DllMain.cpp)
@@ -123,7 +123,7 @@ Deferred in `InitializeGlobal_h` (after game init is safe): `Texture::InstallCha
 - **Hook naming**: `FunctionName_h` for hook, `FunctionName_o` for original pointer
 - **Constants**: `SCREAMING_SNAKE_CASE`
 - **Wire structs**: `#pragma pack(push, 1)` with `static_assert` on sizes
-- **C++17**, no exceptions or RTTI in release builds, static linking
+- **C++23**, no exceptions or RTTI in release builds, static linking
 - **Headers**: `#pragma once`, LGPL boilerplate, system includes → Windows → local
 
 ## Gotchas
@@ -184,6 +184,30 @@ Place these files next to the DLL or in the WoW game folder:
    Game::FrameScript_RegisterFunction("MyFunc", &Script_MyFunc);
    ```
 3. If new namespace, add `YourNamespace::RegisterLuaFunctions()` call to `LoadScriptFunctions_h()` in `DllMain.cpp`
+
+## Formatting & static analysis
+
+Configured via `.clang-format`, `.clang-tidy`, and `.clang-format-ignore` at repo root.
+LLVM 20 tools are at `/opt/homebrew/opt/llvm@20/bin/` (not on PATH by default).
+
+```bash
+# Format all project source files
+/opt/homebrew/opt/llvm@20/bin/clang-format -i $(find VanillaHelpers/src TextureServer64/server/src \
+  TextureServer64/client/src TextureServer64/shared \
+  -name '*.cpp' -o -name '*.h' | grep -v stb_image)
+
+# Check without modifying (CI)
+clang-format --dry-run --Werror <files>
+
+# Run clang-tidy (macOS — uses run-tidy.sh wrapper for MinGW cross-compile headers)
+./run-tidy.sh              # report warnings (server + DLL + tests)
+./run-tidy.sh --fix        # auto-fix safe checks
+./run-tidy.sh server       # server only
+./run-tidy.sh dll          # DLL only
+```
+
+Vendored code (`external/`, `stb_image.h`) is excluded from both tools.
+Checks disabled from `--fix` (broken auto-fixes): `misc-include-cleaner`, `modernize-use-std-print`, `modernize-use-integer-sign-comparison`, `bugprone-reserved-identifier`, `modernize-loop-convert`.
 
 ## Attribution
 

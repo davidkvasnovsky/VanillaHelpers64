@@ -12,6 +12,7 @@
 // VanillaHelpers. If not, see <https://www.gnu.org/licenses/>.
 
 #include "GameUnused.h"
+
 #include "OffsetsUnused.h"
 
 namespace Game {
@@ -23,17 +24,14 @@ const MinimapGetWorldRadius_t MinimapGetWorldRadius =
     reinterpret_cast<MinimapGetWorldRadius_t>(Offsets::FUN_MINIMAP_GET_WORLD_RADIUS);
 
 // Used in the original RenderObjectBlips
-uint8_t &s_renderObjectBlipsInitialized =
-    *reinterpret_cast<uint8_t *>(Offsets::VAR_RENDER_OBJECT_BLIPS_INITIALIZED);
+uint8_t& s_renderObjectBlipsInitialized = *reinterpret_cast<uint8_t*>(Offsets::VAR_RENDER_OBJECT_BLIPS_INITIALIZED);
 // Used by the original RenderObjectBlips, this is the default atlas texture (ObjectIcons.blp)
-HTEXTURE__ *&s_blipTexture = *reinterpret_cast<HTEXTURE__ **>(Offsets::VAR_BLIP_TEXTURE);
+HTEXTURE__*& s_blipTexture = *reinterpret_cast<HTEXTURE__**>(Offsets::VAR_BLIP_TEXTURE);
 // Contains the data used to draw the blips rendered in RenderObjectBlips
-MinimapObjectArray *s_minimapObjects =
-    reinterpret_cast<MinimapObjectArray *>(Offsets::VAR_MINIMAP_OBJECTS);
+MinimapObjectArray* s_minimapObjects = reinterpret_cast<MinimapObjectArray*>(Offsets::VAR_MINIMAP_OBJECTS);
 // Contains the texture coords of the original blip atlas texture (ObjectIcons.blp)
-TexCoord *s_iconCoords = reinterpret_cast<TexCoord *>(Offsets::CONST_ICON_COORDS);
+TexCoord* s_iconCoords = reinterpret_cast<TexCoord*>(Offsets::CONST_ICON_COORDS);
 // Contains the scale of each of the original blips
-MinimapTypeInfoEntry *s_minimapTypeInfo =
-    reinterpret_cast<MinimapTypeInfoEntry *>(Offsets::CONST_MINI_MAP_TYPE_INFO);
+MinimapTypeInfoEntry* s_minimapTypeInfo = reinterpret_cast<MinimapTypeInfoEntry*>(Offsets::CONST_MINI_MAP_TYPE_INFO);
 
 } // namespace Game

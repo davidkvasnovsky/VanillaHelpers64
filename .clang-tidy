@@ -1,0 +1,32 @@
+Checks: >
+  -*,
+  bugprone-*,
+  clang-analyzer-*,
+  cppcoreguidelines-*,
+  misc-const-correctness,
+  misc-coroutine-hostile-raii,
+  misc-header-include-cycle,
+  misc-redundant-expression,
+  modernize-*,
+  performance-*,
+  readability-*,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-reserved-identifier,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -cppcoreguidelines-avoid-non-const-global-variables,
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  -cppcoreguidelines-pro-type-reinterpret-cast,
+  -cppcoreguidelines-pro-type-union-access,
+  -cppcoreguidelines-pro-type-vararg,
+  -misc-include-cleaner,
+  -modernize-loop-convert,
+  -modernize-use-integer-sign-comparison,
+  -modernize-use-std-print,
+  -readability-identifier-length,
+  -readability-magic-numbers
+
+HeaderFilterRegex: '(VanillaHelpers/src/|TextureServer64/(server/(src/(Server|Shared|Thread|Blp|Tga|Lru|Win|ServerLog)|tests/)|client/src/|shared/))'
+
+ExtraArgs:
+  - '-std=c++23'
+  - '-DNDEBUG'

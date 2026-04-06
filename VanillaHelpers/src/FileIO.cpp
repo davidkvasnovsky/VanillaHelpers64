@@ -12,6 +12,7 @@
 // VanillaHelpers. If not, see <https://www.gnu.org/licenses/>.
 
 #include "FileIO.h"
+
 #include "Game.h"
 
 #include <cstring>
@@ -25,23 +26,23 @@ namespace FileIO {
 static const char DATA_DIR[] = "VanillaHelpersData";
 static const char DATA_DIR_PREFIX[] = "VanillaHelpersData\\";
 
-static std::string DataPath(const char *filename) {
+static auto DataPath(const char* filename) -> std::string {
     return std::string(DATA_DIR_PREFIX) + filename;
 }
 
-static bool IsValidFilename(const char *name) {
-    return name && name[0] != '\0' && strpbrk(name, "<>:\"/\\|?*") == nullptr;
+static auto IsValidFilename(const char* name) -> bool {
+    return (name != nullptr) && name[0] != '\0' && strpbrk(name, "<>:\"/\\|?*") == nullptr;
 }
 
-static int __fastcall Script_WriteFile(void *L) {
+static int __fastcall Script_WriteFile(void* L) {
     if (!Game::Lua::IsString(L, 1) || !Game::Lua::IsString(L, 2) || !Game::Lua::IsString(L, 3)) {
         Game::Lua::Error(L, "Usage: WriteFile(filename, mode, content)");
         return 0;
     }
 
-    const auto *filename = Game::Lua::ToString(L, 1);
-    const auto *mode = Game::Lua::ToString(L, 2);
-    const auto *content = Game::Lua::ToString(L, 3);
+    const auto* filename = Game::Lua::ToString(L, 1);
+    const auto* mode = Game::Lua::ToString(L, 2);
+    const auto* content = Game::Lua::ToString(L, 3);
 
     if (!IsValidFilename(filename)) {
         Game::Lua::Error(L, "Invalid or empty filename (must not contain: < > : \" / \\ | ? *)");
@@ -54,7 +55,7 @@ static int __fastcall Script_WriteFile(void *L) {
 
     CreateDirectoryA(DATA_DIR, nullptr);
 
-    std::string fullPath = DataPath(filename);
+    std::string const fullPath = DataPath(filename);
 
     auto openmode = std::ios::out;
     openmode |= (mode[0] == 'w') ? std::ios::trunc : std::ios::app;
@@ -74,21 +75,21 @@ static int __fastcall Script_WriteFile(void *L) {
     return 0;
 }
 
-static int __fastcall Script_ReadFile(void *L) {
+static int __fastcall Script_ReadFile(void* L) {
     if (!Game::Lua::IsString(L, 1)) {
         Game::Lua::Error(L, "Usage: ReadFile(filename)");
         return 0;
     }
 
-    const auto *filename = Game::Lua::ToString(L, 1);
+    const auto* filename = Game::Lua::ToString(L, 1);
     if (!IsValidFilename(filename)) {
         Game::Lua::Error(L, "Invalid or empty filename (must not contain: < > : \" / \\ | ?*)");
         return 0;
     }
 
-    std::string fullPath = DataPath(filename);
+    std::string const fullPath = DataPath(filename);
 
-    std::ifstream in(fullPath);
+    std::ifstream const in(fullPath);
     if (!in) {
         Game::Lua::Error(L, "Failed to open file for reading.");
         return 0;
@@ -96,27 +97,27 @@ static int __fastcall Script_ReadFile(void *L) {
 
     std::ostringstream buf;
     buf << in.rdbuf();
-    std::string data = buf.str();
+    std::string const data = buf.str();
 
     Game::Lua::PushString(L, data.c_str());
     return 1;
 }
 
-static int __fastcall Script_FileExists(void *L) {
+static int __fastcall Script_FileExists(void* L) {
     if (!Game::Lua::IsString(L, 1)) {
         Game::Lua::Error(L, "Usage: FileExists(filename)");
         return 0;
     }
 
-    const auto *filename = Game::Lua::ToString(L, 1);
+    const auto* filename = Game::Lua::ToString(L, 1);
     if (!IsValidFilename(filename)) {
         Game::Lua::Error(L, "Invalid or empty filename (must not contain: < > : \" / \\ | ?*)");
         return 0;
     }
 
-    std::string fullPath = DataPath(filename);
+    std::string const fullPath = DataPath(filename);
 
-    bool exists = (GetFileAttributesA(fullPath.c_str()) != INVALID_FILE_ATTRIBUTES);
+    bool const exists = (GetFileAttributesA(fullPath.c_str()) != INVALID_FILE_ATTRIBUTES);
     Game::Lua::PushNumber(L, exists ? 1.0 : 0.0);
     return 1;
 }

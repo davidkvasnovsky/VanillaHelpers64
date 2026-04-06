@@ -4,13 +4,14 @@
 #include "Server.h"
 #include "ServerLog.h"
 
+#include <algorithm>
+#include <csignal>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <csignal>
 
 #ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
+#    define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>
 
@@ -19,10 +20,10 @@ static TexServer::Server* g_server = nullptr;
 static constexpr size_t kMiB = 1024ULL * 1024ULL;
 static constexpr size_t kGiB = 1024ULL * 1024ULL * 1024ULL;
 
-static size_t DetectDefaultCacheBytes() {
+static auto DetectDefaultCacheBytes() -> size_t {
     MEMORYSTATUSEX mem{};
     mem.dwLength = sizeof(mem);
-    if (!GlobalMemoryStatusEx(&mem) || mem.ullTotalPhys == 0) {
+    if ((GlobalMemoryStatusEx(&mem) == 0) || mem.ullTotalPhys == 0) {
         return 4ULL * kGiB;
     }
 
@@ -30,14 +31,14 @@ static size_t DetectDefaultCacheBytes() {
     const uint64_t minBytes = 4ULL * kGiB;
     const uint64_t maxBytes = 32ULL * kGiB;
 
-    if (target < minBytes) target = minBytes;
-    if (target > maxBytes) target = maxBytes;
+    target = std::max(target, minBytes);
+    target = std::min(target, maxBytes);
     return static_cast<size_t>(target);
 }
 
 static BOOL WINAPI ConsoleCtrlHandler(DWORD ctrlType) {
     (void)ctrlType;
-    if (g_server) {
+    if (g_server != nullptr) {
         TexServer::ServerLog("Caught console signal, shutting down...");
         g_server->Stop();
     }
@@ -51,7 +52,7 @@ static void PrintUsage(const char* exe) {
     fprintf(stderr, "  --visible      Keep console window open for logging\n");
 }
 
-int main(int argc, char* argv[]) {
+auto main(int argc, char* argv[]) -> int {
     TexServer::ServerConfig config;
     bool visible = false;
     bool cacheOverride = false;
@@ -61,7 +62,7 @@ int main(int argc, char* argv[]) {
         if (strcmp(argv[i], "--threads") == 0 && i + 1 < argc) {
             config.thread_count = static_cast<uint32_t>(atoi(argv[++i]));
         } else if (strcmp(argv[i], "--cache-mb") == 0 && i + 1 < argc) {
-            size_t mb = static_cast<size_t>(atoi(argv[++i]));
+            auto const mb = static_cast<size_t>(atoi(argv[++i]));
             config.cache_max_bytes = mb * kMiB;
             cacheOverride = true;
         } else if (strcmp(argv[i], "--visible") == 0) {
@@ -100,13 +101,9 @@ int main(int argc, char* argv[]) {
 
     printf("=============================================================\n");
     TexServer::ServerLog("TextureServer64 starting...");
-    TexServer::ServerLog("  PID:      %lu",
-                         static_cast<unsigned long>(GetCurrentProcessId()));
-    TexServer::ServerLog("  threads:  %u %s",
-                         config.thread_count,
-                         config.thread_count == 0 ? "(auto)" : "");
-    TexServer::ServerLog("  cache:    %.0f MiB",
-                         static_cast<double>(config.cache_max_bytes) / (1024.0 * 1024.0));
+    TexServer::ServerLog("  PID:      %lu", static_cast<unsigned long>(GetCurrentProcessId()));
+    TexServer::ServerLog("  threads:  %u %s", config.thread_count, config.thread_count == 0 ? "(auto)" : "");
+    TexServer::ServerLog("  cache:    %.0f MiB", static_cast<double>(config.cache_max_bytes) / (1024.0 * 1024.0));
     TexServer::ServerLog("  cacheSrc: %s", cacheOverride ? "command line" : "auto (35% RAM)");
     TexServer::ServerLog("  visible:  %s", visible ? "yes" : "no");
     printf("=============================================================\n");

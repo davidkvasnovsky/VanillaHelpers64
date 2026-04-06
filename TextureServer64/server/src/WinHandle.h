@@ -4,12 +4,11 @@
 // handles because DLL_PROCESS_DETACH cleanup order is fragile.
 
 #ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
+#    define WIN32_LEAN_AND_MEAN
 #endif
-#include <windows.h>
-
 #include <cstdint>
-#include <utility>  // std::exchange
+#include <utility> // std::exchange
+#include <windows.h>
 
 namespace TexServer {
 
@@ -23,21 +22,26 @@ public:
     ~UniqueHandle() noexcept { reset(); }
 
     UniqueHandle(UniqueHandle&& o) noexcept : h_(std::exchange(o.h_, Sentinel)) {}
-    UniqueHandle& operator=(UniqueHandle&& o) noexcept {
-        if (this != &o) { reset(); h_ = std::exchange(o.h_, Sentinel); }
+    auto operator=(UniqueHandle&& o) noexcept -> UniqueHandle& {
+        if (this != &o) {
+            reset();
+            h_ = std::exchange(o.h_, Sentinel);
+        }
         return *this;
     }
 
     UniqueHandle(const UniqueHandle&) = delete;
-    UniqueHandle& operator=(const UniqueHandle&) = delete;
+    auto operator=(const UniqueHandle&) -> UniqueHandle& = delete;
 
-    HANDLE get() const noexcept { return h_; }
+    [[nodiscard]] auto get() const noexcept -> HANDLE { return h_; }
     explicit operator bool() const noexcept { return h_ != Sentinel; }
 
-    HANDLE release() noexcept { return std::exchange(h_, Sentinel); }
+    auto release() noexcept -> HANDLE { return std::exchange(h_, Sentinel); }
 
     void reset(HANDLE h = Sentinel) noexcept {
-        if (h_ != Sentinel) CloseHandle(h_);
+        if (h_ != Sentinel) {
+            CloseHandle(h_);
+        }
         h_ = h;
     }
 
@@ -53,21 +57,26 @@ public:
     ~UniqueMapView() noexcept { reset(); }
 
     UniqueMapView(UniqueMapView&& o) noexcept : p_(std::exchange(o.p_, nullptr)) {}
-    UniqueMapView& operator=(UniqueMapView&& o) noexcept {
-        if (this != &o) { reset(); p_ = std::exchange(o.p_, nullptr); }
+    auto operator=(UniqueMapView&& o) noexcept -> UniqueMapView& {
+        if (this != &o) {
+            reset();
+            p_ = std::exchange(o.p_, nullptr);
+        }
         return *this;
     }
 
     UniqueMapView(const UniqueMapView&) = delete;
-    UniqueMapView& operator=(const UniqueMapView&) = delete;
+    auto operator=(const UniqueMapView&) -> UniqueMapView& = delete;
 
-    uint8_t* get() const noexcept { return p_; }
+    [[nodiscard]] auto get() const noexcept -> uint8_t* { return p_; }
     explicit operator bool() const noexcept { return p_ != nullptr; }
 
-    uint8_t* release() noexcept { return std::exchange(p_, nullptr); }
+    auto release() noexcept -> uint8_t* { return std::exchange(p_, nullptr); }
 
     void reset(void* p = nullptr) noexcept {
-        if (p_) UnmapViewOfFile(p_);
+        if (p_ != nullptr) {
+            UnmapViewOfFile(p_);
+        }
         p_ = static_cast<uint8_t*>(p);
     }
 

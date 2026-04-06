@@ -3,13 +3,13 @@
 // Manages the named pipe accept loop, request dispatch, decode pipeline,
 // LRU cache, and shared memory placement.
 
+#include "../../shared/Protocol.h"
 #include "BlpDecoder.h"
 #include "LruCache.h"
 #include "SharedMemory.h"
 #include "TgaDecoder.h"
 #include "ThreadPool.h"
 #include "WinHandle.h"
-#include "../../shared/Protocol.h"
 
 #include <atomic>
 #include <string>
@@ -18,8 +18,8 @@
 namespace TexServer {
 
 struct ServerConfig {
-    uint32_t thread_count    = 0;   // 0 = auto (hardware_concurrency)
-    size_t   cache_max_bytes = 0;   // 0 = auto-size from physical RAM
+    uint32_t thread_count = 0;  // 0 = auto (hardware_concurrency)
+    size_t cache_max_bytes = 0; // 0 = auto-size from physical RAM
 };
 
 class Server {
@@ -29,10 +29,10 @@ public:
 
     // Non-copyable.
     Server(const Server&) = delete;
-    Server& operator=(const Server&) = delete;
+    auto operator=(const Server&) -> Server& = delete;
 
     /// Initialize shared memory and thread pool. Returns false on failure.
-    bool Start();
+    auto Start() -> bool;
 
     /// Block in the named-pipe accept loop until Stop() is called.
     void Run();
@@ -45,8 +45,7 @@ private:
     void HandleClient(HANDLE pipe);
 
     /// Process a Load/Prefetch request: decode raw_data and place in shared memory.
-    void HandleLoad(HANDLE pipe, const std::string& path,
-                    const std::vector<uint8_t>& raw_data, uint8_t priority);
+    void HandleLoad(HANDLE pipe, const std::string& path, const std::vector<uint8_t>& raw_data, uint8_t priority);
 
     /// Process a Query request: check if a texture is in the LRU cache.
     void HandleQuery(HANDLE pipe, const std::string& path);
@@ -55,36 +54,33 @@ private:
     void HandleStats(HANDLE pipe);
 
     /// Decode raw BLP or TGA data based on file extension.
-    bool DecodeRawData(const std::string& path,
-                       const std::vector<uint8_t>& raw_data,
-                       DecodedTexture& result);
+    auto DecodeRawData(const std::string& path, const std::vector<uint8_t>& raw_data, DecodedTexture& result) -> bool;
 
     /// Allocate a shared-memory slot, copy decoded pixels, fill slot header.
     /// Returns the slot index, or -1 on failure (no free slots, data too large).
-    int32_t PlaceInSharedMemory(const DecodedTexture& tex,
-                                const std::string& path);
+    auto PlaceInSharedMemory(const DecodedTexture& tex, const std::string& path) -> int32_t;
 
     /// Send a Response struct over the pipe.
-    static bool SendResponse(HANDLE pipe, const TexProto::Response& resp);
+    static auto SendResponse(HANDLE pipe, const TexProto::Response& resp) -> bool;
 
     /// Read exactly `size` bytes from the pipe into `buf`. Returns false on error/EOF.
-    static bool ReadPipe(HANDLE pipe, void* buf, DWORD size);
+    static auto ReadPipe(HANDLE pipe, void* buf, DWORD size) -> bool;
 
-    ServerConfig              config_;
-    ThreadPool                pool_;
-    SharedMemory              shm_;
-    LruCache                  cache_;
-    BlpDecoder                blp_decoder_;
-    TgaDecoder                tga_decoder_;
-    std::atomic<bool>         running_{false};
-    UniqueHandle<>            shm_ready_event_;
-    std::atomic<uint32_t>     inflight_decodes_{0};
-    std::atomic<uint64_t>     queued_bytes_{0};
+    ServerConfig config_;
+    ThreadPool pool_;
+    SharedMemory shm_;
+    LruCache cache_;
+    BlpDecoder blp_decoder_;
+    TgaDecoder tga_decoder_;
+    std::atomic<bool> running_{false};
+    UniqueHandle<> shm_ready_event_;
+    std::atomic<uint32_t> inflight_decodes_{0};
+    std::atomic<uint64_t> queued_bytes_{0};
 
     // Stats counters.
-    std::atomic<uint64_t>     total_requests_{0};
-    std::atomic<uint64_t>     cache_hits_{0};
-    std::atomic<uint64_t>     decode_failures_{0};
+    std::atomic<uint64_t> total_requests_{0};
+    std::atomic<uint64_t> cache_hits_{0};
+    std::atomic<uint64_t> decode_failures_{0};
 };
 
 } // namespace TexServer
