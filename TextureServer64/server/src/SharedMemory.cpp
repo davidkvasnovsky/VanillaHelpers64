@@ -130,6 +130,29 @@ auto SharedMemory::GetSlotData(int32_t slot) -> uint8_t* {
     return slotBase + TexProto::SLOT_HEADER;
 }
 
+auto SharedMemory::TryReclaimSlotInState(TexProto::SlotState target, DWORD leaseMs, DWORD now) -> int32_t {
+    for (int32_t i = 0; i < static_cast<int32_t>(TexProto::SLOT_COUNT); ++i) {
+        auto* sh = GetSlotHeader(i);
+        if (sh->state == static_cast<uint32_t>(target)) {
+            // m_readyTick records when the slot became Ready (set in MarkSlotReady),
+            // not when it transitioned to the current state.  For Uploaded slots
+            // this is a conservative lower bound — the actual Uploaded age is shorter.
+            auto const readyAt = static_cast<DWORD>(InterlockedCompareExchange(&m_readyTick[i], 0, 0));
+            if (static_cast<LONG>(now - readyAt) >= static_cast<LONG>(leaseMs)) {
+                LONG const prev = InterlockedCompareExchange(
+                    reinterpret_cast<volatile LONG*>(&sh->state),
+                    static_cast<LONG>(TexProto::SlotState::Reading),
+                    static_cast<LONG>(target)
+                );
+                if (prev == static_cast<LONG>(target)) {
+                    return i;
+                }
+            }
+        }
+    }
+    return -1;
+}
+
 auto SharedMemory::AllocateSlot() -> int32_t {
     if (!m_pHeaderBase) {
         return -1;
@@ -149,28 +172,22 @@ auto SharedMemory::AllocateSlot() -> int32_t {
         }
     }
 
-    // Slow path: reclaim stale Ready slots.  Only reclaim slots that have been
-    // in Ready state for at least READY_LEASE_MS.  The client CASes Ready→Uploaded
-    // before reading, but there is a small window between the server sending the
-    // pipe response and the client performing the CAS.  The lease timeout prevents
-    // the server from recycling a slot during that window.
+    // Slow path: reclaim stale slots.  Ready slots are reclaimed after 5s
+    // (the client CASes Ready→Uploaded before reading; the lease prevents
+    // the server from recycling during that window).  Uploaded slots are
+    // reclaimed after 30s (the client should release to Empty within a few
+    // frames; stuck means crashed or lost).
     static constexpr DWORD READY_LEASE_MS = 5000;
+    static constexpr DWORD UPLOADED_LEASE_MS = 30'000;
     DWORD const now = GetTickCount();
-    for (int32_t i = 0; i < static_cast<int32_t>(TexProto::SLOT_COUNT); ++i) {
-        auto* sh = GetSlotHeader(i);
-        if (sh->state == static_cast<uint32_t>(TexProto::SlotState::Ready)) {
-            auto const readyAt = static_cast<DWORD>(InterlockedCompareExchange(&m_readyTick[i], 0, 0));
-            if (static_cast<LONG>(now - readyAt) >= static_cast<LONG>(READY_LEASE_MS)) {
-                LONG const prev = InterlockedCompareExchange(
-                    reinterpret_cast<volatile LONG*>(&sh->state),
-                    static_cast<LONG>(TexProto::SlotState::Reading),
-                    static_cast<LONG>(TexProto::SlotState::Ready)
-                );
-                if (prev == static_cast<LONG>(TexProto::SlotState::Ready)) {
-                    return i;
-                }
-            }
-        }
+
+    int32_t slot = TryReclaimSlotInState(TexProto::SlotState::Ready, READY_LEASE_MS, now);
+    if (slot >= 0) {
+        return slot;
+    }
+    slot = TryReclaimSlotInState(TexProto::SlotState::Uploaded, UPLOADED_LEASE_MS, now);
+    if (slot >= 0) {
+        return slot;
     }
 
     return -1; // all slots in use (Reading or Decoding — actively in flight)

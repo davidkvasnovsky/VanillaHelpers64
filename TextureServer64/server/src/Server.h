@@ -54,7 +54,8 @@ private:
     void HandleStats(HANDLE pipe);
 
     /// Decode raw BLP or TGA data based on file extension.
-    static auto DecodeRawData(const std::string& path, const std::vector<uint8_t>& raw_data, DecodedTexture& result) -> bool;
+    static auto DecodeRawData(const std::string& path, const std::vector<uint8_t>& raw_data, DecodedTexture& result)
+        -> bool;
 
     /// Allocate a shared-memory slot, copy decoded pixels, fill slot header.
     /// Returns the slot index, or -1 on failure (no free slots, data too large).

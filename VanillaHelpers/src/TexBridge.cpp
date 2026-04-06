@@ -317,6 +317,165 @@ void LogClose() {
     }
 }
 
+struct HookProbeSite {
+    const char* name;
+    uintptr_t address;
+};
+
+auto TryReadProbeBytes(uintptr_t address, void* dst, size_t size) -> bool {
+    if ((address == 0U) || (dst == nullptr) || size == 0U) {
+        return false;
+    }
+    if (IsBadReadPtr(reinterpret_cast<const void*>(address), size) != 0) {
+        return false;
+    }
+    memcpy(dst, reinterpret_cast<const void*>(address), size);
+    return true;
+}
+
+void FormatProbeBytes(const uint8_t* bytes, size_t count, char* dst, size_t dstSize) {
+    if ((dst == nullptr) || dstSize == 0U) {
+        return;
+    }
+    dst[0] = '\0';
+    if ((bytes == nullptr) || count == 0U) {
+        return;
+    }
+
+    size_t offset = 0;
+    for (size_t i = 0; i < count && offset + 4 < dstSize; ++i) {
+        int const written =
+            _snprintf_s(dst + offset, dstSize - offset, _TRUNCATE, "%s%02X", i == 0 ? "" : " ", bytes[i]);
+        if (written <= 0) {
+            break;
+        }
+        offset += static_cast<size_t>(written);
+    }
+}
+
+auto GetProbeOwnerModule(uintptr_t address, uintptr_t& moduleBase, char* modulePath, size_t modulePathSize) -> bool {
+    moduleBase = 0;
+    if ((modulePath != nullptr) && modulePathSize > 0U) {
+        modulePath[0] = '\0';
+    }
+    if (address == 0U) {
+        return false;
+    }
+
+    MEMORY_BASIC_INFORMATION mbi{};
+    if (VirtualQuery(reinterpret_cast<const void*>(address), &mbi, sizeof(mbi)) == 0U ||
+        (mbi.AllocationBase == nullptr)) {
+        return false;
+    }
+
+    moduleBase = reinterpret_cast<uintptr_t>(mbi.AllocationBase);
+    if ((modulePath != nullptr) && modulePathSize > 0U) {
+        DWORD const len = GetModuleFileNameA(
+            reinterpret_cast<HMODULE>(mbi.AllocationBase), modulePath, static_cast<DWORD>(modulePathSize)
+        );
+        if (len == 0U) {
+            strncpy_s(modulePath, modulePathSize, "<unknown>", _TRUNCATE);
+        }
+    }
+    return true;
+}
+
+auto ResolveHookProbeTarget(
+    uintptr_t siteAddress,
+    const uint8_t* bytes,
+    size_t count,
+    uintptr_t& targetAddress,
+    uintptr_t& targetPointer,
+    const char*& detourKind
+) -> bool {
+    targetAddress = 0;
+    targetPointer = 0;
+    detourKind = "none";
+
+    if ((bytes == nullptr) || count < 5U) {
+        return false;
+    }
+
+    if (bytes[0] == 0xE9) {
+        int32_t rel32 = 0;
+        memcpy(&rel32, bytes + 1, sizeof(rel32));
+        targetAddress = siteAddress + 5U + static_cast<intptr_t>(rel32);
+        detourKind = "jmp-rel32";
+        return true;
+    }
+
+    if (count >= 6U && bytes[0] == 0xFF && bytes[1] == 0x25) {
+        uint32_t absPtr = 0;
+        memcpy(&absPtr, bytes + 2, sizeof(absPtr));
+        targetPointer = static_cast<uintptr_t>(absPtr);
+        uint32_t indirectTarget = 0;
+        if (TryReadProbeBytes(targetPointer, &indirectTarget, sizeof(indirectTarget))) {
+            targetAddress = static_cast<uintptr_t>(indirectTarget);
+            detourKind = "jmp-abs32";
+            return true;
+        }
+        detourKind = "jmp-abs32-unreadable";
+        return false;
+    }
+
+    return false;
+}
+
+void LogHookProbeSite(const char* phase, const HookProbeSite& site) {
+    uint8_t bytes[16] = {};
+    if (!TryReadProbeBytes(site.address, bytes, sizeof(bytes))) {
+        LogWrite(
+            "HOOK_SITE: phase=%s site=%s addr=%p bytes=<unreadable>",
+            (phase != nullptr) ? phase : "unknown",
+            (site.name != nullptr) ? site.name : "<unnamed>",
+            reinterpret_cast<void*>(site.address)
+        );
+        return;
+    }
+
+    char byteText[sizeof(bytes) * 3] = {};
+    FormatProbeBytes(bytes, sizeof(bytes), byteText, sizeof(byteText));
+
+    uintptr_t targetAddress = 0;
+    uintptr_t targetPointer = 0;
+    const char* detourKind = "none";
+    ResolveHookProbeTarget(site.address, bytes, sizeof(bytes), targetAddress, targetPointer, detourKind);
+
+    uintptr_t moduleBase = 0;
+    char modulePath[MAX_PATH] = {};
+    uintptr_t const ownerAddress =
+        (targetAddress != 0U) ? targetAddress : ((targetPointer != 0U) ? targetPointer : site.address);
+    bool const haveOwner = GetProbeOwnerModule(ownerAddress, moduleBase, modulePath, sizeof(modulePath));
+    if (!haveOwner) {
+        GetProbeOwnerModule(site.address, moduleBase, modulePath, sizeof(modulePath));
+    }
+
+    LogWrite(
+        "HOOK_SITE: phase=%s site=%s addr=%p bytes=%s detour=%s target=%p target_ptr=%p owner=%s base=%p",
+        (phase != nullptr) ? phase : "unknown",
+        (site.name != nullptr) ? site.name : "<unnamed>",
+        reinterpret_cast<void*>(site.address),
+        byteText,
+        detourKind,
+        reinterpret_cast<void*>(targetAddress),
+        reinterpret_cast<void*>(targetPointer),
+        (modulePath[0] != '\0') ? modulePath : "<unknown>",
+        reinterpret_cast<void*>(moduleBase)
+    );
+}
+
+void LogWatchedHookSites(const char* phase) {
+    static const HookProbeSite WATCHED_SITES[] = {
+        {.name = "TextureGetGxTex", .address = Offsets::FUN_TEXTURE_GET_GX_TEX},
+        {.name = "TextureCreate", .address = Offsets::FUN_TEXTURE_CREATE},
+        {.name = "TextureDestroy", .address = Offsets::FUN_TEXTURE_DESTROY},
+    };
+
+    for (const auto& site : WATCHED_SITES) {
+        LogHookProbeSite(phase, site);
+    }
+}
+
 } // anonymous namespace
 
 // ══════════════════════════════════════════════════════════════════════
@@ -430,7 +589,7 @@ void EnqueueDeferredRead(const char* path, uint64_t pathHash) {
 // ══════════════════════════════════════════════════════════════════════
 
 static bool s_initialized = false;
-static bool s_server_available = false;
+static std::atomic<bool> s_server_available{false};
 static HMODULE s_hModule = nullptr;
 static char s_dllDir[MAX_PATH] = {};
 static DWORD s_swap_enable_tick = 0;
@@ -667,6 +826,7 @@ static std::atomic<LONG64> s_stat_freed_bytes{0};
 
 // Original TextureGetGxTex function pointer
 static Game::TextureGetGxTex_t TextureGetGxTex_o = nullptr;
+static std::atomic<bool> s_loggedHookSitesOnFirstCall{false};
 
 // ══════════════════════════════════════════════════════════════════════
 //  Helpers
@@ -1815,46 +1975,65 @@ static auto OpenSharedMemory() -> bool {
 }
 
 static void CloseSharedMemory() {
+    // Null all base pointers FIRST so concurrent readers (GetSlotHeader,
+    // GetSlotData) see nullptr and bail out before we unmap the views.
+    uint8_t* oldHeader = s_shmHeaderBase;
+    s_shmHeaderBase = nullptr;
+
+    uint8_t* oldDataBases[TBProto::SHM_WINDOW_COUNT]{};
     for (uint32_t window = 0; window < TBProto::SHM_WINDOW_COUNT; ++window) {
-        if (s_shmDataBases[window] != nullptr) {
-            UnmapViewOfFile(s_shmDataBases[window]);
-            s_shmDataBases[window] = nullptr;
+        oldDataBases[window] = s_shmDataBases[window];
+        s_shmDataBases[window] = nullptr;
+    }
+
+    // Accepted residual risk: a thread may snapshot an old slot-base pointer
+    // shortly before we unmap it here.  This path is only reachable during
+    // server-crash reconnect, not normal operation.  Fully eliminating it
+    // would require synchronizing hot-path slot access under Wine, which is
+    // judged worse than the rare failure mode.
+    if (oldHeader != nullptr) {
+        UnmapViewOfFile(oldHeader);
+    }
+    if (s_shmHeaderMapping != nullptr) {
+        CloseHandle(s_shmHeaderMapping);
+        s_shmHeaderMapping = nullptr;
+    }
+    for (uint32_t window = 0; window < TBProto::SHM_WINDOW_COUNT; ++window) {
+        if (oldDataBases[window] != nullptr) {
+            UnmapViewOfFile(oldDataBases[window]);
         }
         if (s_shmDataMappings[window] != nullptr) {
             CloseHandle(s_shmDataMappings[window]);
             s_shmDataMappings[window] = nullptr;
         }
     }
-    if (s_shmHeaderBase != nullptr) {
-        UnmapViewOfFile(s_shmHeaderBase);
-        s_shmHeaderBase = nullptr;
-    }
-    if (s_shmHeaderMapping != nullptr) {
-        CloseHandle(s_shmHeaderMapping);
-        s_shmHeaderMapping = nullptr;
-    }
 }
 
 static auto GetSlotHeader(int32_t slot) -> TBProto::SlotHeader* {
-    if ((s_shmHeaderBase == nullptr) || slot < 0 || slot >= static_cast<int32_t>(TBProto::SLOT_COUNT)) {
+    if (slot < 0 || slot >= static_cast<int32_t>(TBProto::SLOT_COUNT)) {
         return nullptr;
     }
     const uint32_t window = static_cast<uint32_t>(slot) / TBProto::SLOTS_PER_WINDOW;
     const uint32_t slotInWindow = static_cast<uint32_t>(slot) % TBProto::SLOTS_PER_WINDOW;
-    return reinterpret_cast<TBProto::SlotHeader*>(
-        s_shmDataBases[window] + (static_cast<uint64_t>(slotInWindow) * TBProto::SLOT_TOTAL)
-    );
+    // Snapshot the pointer — CloseSharedMemory may null it concurrently.
+    uint8_t* base = s_shmDataBases[window];
+    if (base == nullptr) {
+        return nullptr;
+    }
+    return reinterpret_cast<TBProto::SlotHeader*>(base + (static_cast<uint64_t>(slotInWindow) * TBProto::SLOT_TOTAL));
 }
 
 static auto GetSlotData(int32_t slot) -> uint8_t* {
-    if ((s_shmHeaderBase == nullptr) || slot < 0 || slot >= static_cast<int32_t>(TBProto::SLOT_COUNT)) {
+    if (slot < 0 || slot >= static_cast<int32_t>(TBProto::SLOT_COUNT)) {
         return nullptr;
     }
     const uint32_t window = static_cast<uint32_t>(slot) / TBProto::SLOTS_PER_WINDOW;
     const uint32_t slotInWindow = static_cast<uint32_t>(slot) % TBProto::SLOTS_PER_WINDOW;
-    return s_shmDataBases[window] +
-           (static_cast<uint64_t>(slotInWindow) * TBProto::SLOT_TOTAL) +
-           TBProto::SLOT_HEADER_SIZE;
+    uint8_t* base = s_shmDataBases[window];
+    if (base == nullptr) {
+        return nullptr;
+    }
+    return base + (static_cast<uint64_t>(slotInWindow) * TBProto::SLOT_TOTAL) + TBProto::SLOT_HEADER_SIZE;
 }
 
 // ── Pipe I/O ─────────────────────────────────────────────────────────
@@ -1893,27 +2072,24 @@ static volatile LONG s_reconnecting = 0;
 
 static auto ReconnectServer() -> bool {
     if (InterlockedCompareExchange(&s_reconnecting, 1, 0) != 0) {
-        // Another thread is reconnecting — wait for it to finish.
-        // EnsureServerRunning can take ~6.5s (500ms event retries + 3s event wait
-        // + 3s polling fallback), so wait up to 8s before giving up.
-        for (int i = 0; i < 16; ++i) {
-            Sleep(500);
-            if (InterlockedCompareExchange(&s_reconnecting, 0, 0) == 0) {
-                break;
-            }
-        }
-        // Only attempt OpenSharedMemory after the owner finished (s_reconnecting cleared).
-        // If the owner is still running (loop exhausted), return false — let the caller retry.
-        if (InterlockedCompareExchange(&s_reconnecting, 0, 0) != 0) {
-            return false;
-        }
-        return s_server_available;
+        // Another thread is reconnecting.  Return current availability
+        // immediately — blocking here can stall the render thread for
+        // seconds, causing audio hitching and frame drops.  The worker
+        // thread will pick up the reconnected state on its next loop.
+        return s_server_available.load(std::memory_order_acquire);
     }
+    // Mark unavailable so other threads stop entering SHM paths, then close
+    // stale mappings.  If the server crashed, our old mappings are still
+    // valid (kernel objects survive until all handles close) but the pipe and
+    // server process are gone.  Without this, OpenSharedMemory() inside
+    // EnsureServerRunning() sees the stale mappings and never respawns.
+    s_server_available.store(false, std::memory_order_release);
+    CloseSharedMemory();
     LogWrite("ReconnectServer: attempting reconnect");
     bool const ok = EnsureServerRunning();
     if (!ok) {
         CloseSharedMemory();
-        s_server_available = false;
+        s_server_available.store(false, std::memory_order_release);
     }
     LogWrite("ReconnectServer: %s", ok ? "OK" : "FAILED");
     InterlockedExchange(&s_reconnecting, 0);
@@ -2049,7 +2225,11 @@ static auto ReadFileViaStorm(const char* path, uint8_t* buf, uint32_t bufSize) -
     }
 
     Game::SFile_Close(file);
-    LogWrite("ReadFileViaStorm: read %u bytes from '%s'", totalRead, path);
+    if (totalRead >= bufSize) {
+        LogWrite("ReadFileViaStorm: TRUNCATED at %u bytes (buf=%u) for '%s'", totalRead, bufSize, path);
+    } else {
+        LogWrite("ReadFileViaStorm: read %u bytes from '%s'", totalRead, path);
+    }
     return totalRead;
 }
 
@@ -2183,7 +2363,6 @@ static DWORD WINAPI DecodeWorkerProc(LPVOID /*param*/) {
             }
             req = s_queue.front();
             s_queue.pop_front();
-            s_pendingDecodes.erase(req.path_hash);
             ReleaseSRWLockExclusive(&s_queueLock);
         }
 
@@ -2251,6 +2430,13 @@ static DWORD WINAPI DecodeWorkerProc(LPVOID /*param*/) {
         } else {
             LogWrite("Worker: FAILED for '%s'", req.path);
         }
+
+        // Remove dedup guard after decode completes (success or failure).
+        // Kept until now so a second TextureCreate for the same path during
+        // the decode does not trigger another MPQ read + server round-trip.
+        AcquireSRWLockExclusive(&s_queueLock);
+        s_pendingDecodes.erase(req.path_hash);
+        ReleaseSRWLockExclusive(&s_queueLock);
     }
     CloseIfValid(s_threadPipe); // Clean up this thread's persistent pipe
     LogWrite("Worker thread %lu exiting", GetCurrentThreadId());
@@ -2584,14 +2770,19 @@ static void FlushAllDefaultPoolTextures(const char* reason) {
     AcquireSRWLockExclusive(&s_defaultPoolLock);
     size_t const count = s_defaultPoolLru.size();
     for (auto& entry : s_defaultPoolLru) {
-        // Restore managed texture binding in CGxTex
-        if ((entry.texture_key != 0U) && (entry.managed_tex != nullptr)) {
+        // Restore managed texture binding in CGxTex — only if the live
+        // binding still matches our DEFAULT texture (same guard as
+        // RestoreManagedTextureBinding).  If the game swapped in a
+        // different pointer (LOD transition, texture reload), leave it.
+        if ((entry.texture_key != 0U) && (entry.managed_tex != nullptr) && (entry.default_tex != nullptr)) {
             auto* texture = reinterpret_cast<Game::HTEXTURE__*>(entry.texture_key);
             const auto* htexWords = reinterpret_cast<const uint32_t*>(texture);
             auto* gxTex = reinterpret_cast<Game::CGxTex*>(htexWords[OFF_HTEX_GXTEX / 4]);
             if (gxTex != nullptr) {
                 auto* gxWords = reinterpret_cast<uint32_t*>(gxTex);
-                gxWords[OFF_GX_D3DTEX / 4] = reinterpret_cast<uint32_t>(entry.managed_tex);
+                if (reinterpret_cast<void*>(gxWords[OFF_GX_D3DTEX / 4]) == entry.default_tex) {
+                    gxWords[OFF_GX_D3DTEX / 4] = reinterpret_cast<uint32_t>(entry.managed_tex);
+                }
             }
         }
         // Release the DEFAULT texture (still alive — this runs BEFORE Reset)
@@ -3047,6 +3238,13 @@ static Game::CGxTex* __fastcall TextureGetGxTex_h(
 ) {
     s_stat_gxtex_calls.fetch_add(1, std::memory_order_relaxed);
 
+    if (s_loggedHookSitesOnFirstCall.load(std::memory_order_relaxed)) {
+        bool expected = true;
+        if (s_loggedHookSitesOnFirstCall.compare_exchange_strong(expected, false, std::memory_order_relaxed)) {
+            LogWatchedHookSites("first-TextureGetGxTex_h");
+        }
+    }
+
     // Per-frame work — runs once per GetTickCount tick (~15ms) since
     // OnFrameTick has no external caller.  One GetTickCount per call,
     // cached as tickNow for reuse in IsTrackedBindingStale below.
@@ -3320,7 +3518,22 @@ static void __fastcall TextureAllocFreePayload_h(
     if (payload != nullptr) {
         EarlyReleasedPayload released{};
         bool skip = false;
+        bool stalePendingCleared = false;
         AcquireSRWLockExclusive(&s_main0573PayloadLock);
+        // Clear stale pending entries when Storm frees this payload.
+        // The 0x573 temp buffer is always freed by Storm within the same
+        // file-read call that allocated it, before our deferred early-release.
+        if (arg2 == 0x00866650 && arg3 != 0x573) {
+            for (auto pit = s_pendingMain0573Payloads.begin(); pit != s_pendingMain0573Payloads.end();) {
+                if (pit->second.payload == payload && pit->second.allocator == thisptr) {
+                    released = pit->second;
+                    stalePendingCleared = true;
+                    pit = s_pendingMain0573Payloads.erase(pit);
+                } else {
+                    ++pit;
+                }
+            }
+        }
         auto it = s_earlyReleasedPayloads.find(reinterpret_cast<uintptr_t>(payload));
         if (it != s_earlyReleasedPayloads.end() &&
             it->second.allocator == thisptr &&
@@ -3331,6 +3544,17 @@ static void __fastcall TextureAllocFreePayload_h(
             skip = true;
         }
         ReleaseSRWLockExclusive(&s_main0573PayloadLock);
+        if (stalePendingCleared) {
+            LogWrite(
+                "TEXTURE_ALLOC_MAIN_0573_PENDING_CLEARED: texture=%p payload=%p "
+                "allocator=%p allocArg3=%p freeArg3=%p",
+                reinterpret_cast<void*>(released.texture_key),
+                payload,
+                thisptr,
+                reinterpret_cast<void*>(released.arg3),
+                reinterpret_cast<void*>(arg3)
+            );
+        }
         if (skip) {
             LogWrite(
                 "TEXTURE_ALLOC_MAIN_0573_DUPFREE_SKIP: texture=%p payload=%p raw=%p size=%u class=%u arg2=%p arg3=%p",
@@ -3415,7 +3639,7 @@ auto EnsureServerRunning() -> bool {
 
     // Check if server is already running.
     if (OpenSharedMemory()) {
-        s_server_available = true;
+        s_server_available.store(true, std::memory_order_release);
         StartWorker();
         LogWrite("EnsureServerRunning: server already running, SHM connected");
         return true;
@@ -3511,7 +3735,7 @@ auto EnsureServerRunning() -> bool {
         }
     }
     if (connected) {
-        s_server_available = true;
+        s_server_available.store(true, std::memory_order_release);
         StartWorker();
         LogWrite("EnsureServerRunning: SHM connected");
         return true;
@@ -3539,6 +3763,8 @@ auto InstallHooks() -> bool {
         return true;
     }
 
+    LogWatchedHookSites("pre-install");
+
     // Hook TextureCreate — entry point for ALL texture loading.
     HOOK_FUNCTION(Offsets::FUN_TEXTURE_CREATE, TextureCreate_h, TextureCreate_o);
     LogWrite("InstallHooks: TextureCreate hooked OK, original=%p", TextureCreate_o);
@@ -3564,6 +3790,8 @@ auto InstallHooks() -> bool {
     // free CPU-side pixel buffers after the GPU copy is complete.
     HOOK_FUNCTION(Offsets::FUN_TEXTURE_GET_GX_TEX, TextureGetGxTex_h, TextureGetGxTex_o);
     LogWrite("InstallHooks: TextureGetGxTex hooked OK, original=%p", TextureGetGxTex_o);
+    LogWatchedHookSites("post-install");
+    s_loggedHookSitesOnFirstCall.store(true, std::memory_order_relaxed);
     s_swap_enable_tick = GetTickCount() + SWAP_STARTUP_GRACE_MS;
     s_swap_world_ready_tick = 0;
     s_swap_world_ready_logged = false;
@@ -3656,7 +3884,7 @@ void Shutdown(bool terminateServer) {
 
         CloseSharedMemory();
         s_pool.Destroy();
-        s_server_available = false;
+        s_server_available.store(false, std::memory_order_release);
         s_initialized = false;
         s_swap_enable_tick = 0;
     } else {
@@ -3750,6 +3978,21 @@ void OnFrameTick() {
                 break;
             }
 
+            // Skip the MPQ read if a decode for this path is already in flight.
+            // The worker keeps s_pendingDecodes until completion, so we would
+            // just waste a synchronous Storm read every frame until it finishes.
+            // Drop the deferred entry — the texture will be available once the
+            // worker finishes, and a fresh create will pick it up from cache.
+            {
+                AcquireSRWLockShared(&s_queueLock);
+                bool const alreadyDecoding = s_pendingDecodes.contains(dr.path_hash);
+                ReleaseSRWLockShared(&s_queueLock);
+                if (alreadyDecoding) {
+                    s_deferredReadHashes.erase(dr.path_hash);
+                    continue;
+                }
+            }
+
             int const bufIdx = s_pool.Acquire();
             if (bufIdx < 0) {
                 s_deferredReads.push_front(dr);
@@ -3763,8 +4006,6 @@ void OnFrameTick() {
                 s_pool.Release(bufIdx);
                 continue;
             }
-            s_deferredReadHashes.erase(dr.path_hash);
-
             uint64_t const dh = DirHash(dr.path);
             if (dh != 0) {
                 s_recentDirs[s_recentDirIdx % PREFETCH_HISTORY] = dh;
@@ -3772,8 +4013,12 @@ void OnFrameTick() {
             }
 
             if (!QueueDecode(dr.path, bufIdx, rawSize, 128)) {
+                // Back-pressure: re-queue the read so it retries next frame.
+                s_deferredReads.push_front(dr);
                 s_pool.Release(bufIdx);
+                break;
             }
+            s_deferredReadHashes.erase(dr.path_hash);
         }
     }
 
@@ -3911,15 +4156,18 @@ auto GetDecodedTexture(const char* path, const void* rawData, uint32_t rawSize, 
 }
 
 void ReleaseSlot(int32_t slot) {
-    if ((s_shmHeaderBase == nullptr) || slot < 0 || slot >= static_cast<int32_t>(TBProto::SLOT_COUNT)) {
+    if (slot < 0 || slot >= static_cast<int32_t>(TBProto::SLOT_COUNT)) {
         return;
     }
 
     const uint32_t window = static_cast<uint32_t>(slot) / TBProto::SLOTS_PER_WINDOW;
     const uint32_t slotInWindow = static_cast<uint32_t>(slot) % TBProto::SLOTS_PER_WINDOW;
-    volatile LONG* state = reinterpret_cast<volatile LONG*>(
-        s_shmDataBases[window] + (static_cast<uint64_t>(slotInWindow) * TBProto::SLOT_TOTAL)
-    );
+    uint8_t* base = s_shmDataBases[window];
+    if (base == nullptr) {
+        return;
+    }
+    volatile LONG* state =
+        reinterpret_cast<volatile LONG*>(base + (static_cast<uint64_t>(slotInWindow) * TBProto::SLOT_TOTAL));
 
     InterlockedExchange(state, static_cast<LONG>(TBProto::STATE_EMPTY));
 }

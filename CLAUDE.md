@@ -107,7 +107,7 @@ WoW.exe ← VanillaHelpers.dll (32-bit, MinHook)
 
 - **Request** (8 bytes packed): cmd, priority, path_len, data_size — followed by path + raw file bytes
 - **Response** (19 bytes packed): status, slot_id, width, height, data_size, pixel_format, mip_levels
-- **Slot states**: EMPTY→READING→DECODING→READY→UPLOADED→EMPTY. Client CASes Ready→Uploaded before reading slot data; server only reclaims Ready slots older than 5s (lease timeout). (`volatile uint32_t`, lock-free polling via `Interlocked*`)
+- **Slot states**: EMPTY→READING→DECODING→READY→UPLOADED→EMPTY. Client CASes Ready→Uploaded before reading slot data; server reclaims stale Ready slots (5s) and stale Uploaded slots (30s). (`volatile uint32_t`, lock-free polling via `Interlocked*`)
 - **Path hash**: FNV-1a with slash normalization (`/`→`\`) and case folding
 
 ### Initialization sequence (DllMain.cpp)
@@ -115,6 +115,15 @@ WoW.exe ← VanillaHelpers.dll (32-bit, MinHook)
 DLL_PROCESS_ATTACH: `Offsets::LoadFromFile` → `Game::Init` → `MH_Initialize` → `Allocator::Initialize` → `Texture::Initialize` → hook 4 game functions → `Allocator::InstallHooks` → `Texture::InstallHooks`.
 
 Deferred in `InitializeGlobal_h` (after game init is safe): `Texture::InstallCharacterSkin` → `TexBridge::Initialize` → `TexBridge::EnsureServerRunning` → `TexBridge::InstallHooks`.
+
+## Decompiled WoW reference
+
+`../re-output/` contains Ghidra-decompiled WoW 1.12 source (~40 files, ~830K lines). Key uses:
+- Cross-reference hook targets against actual game behavior (function lifecycles, cleanup paths)
+- Verify allocator patch sites with `python3` PE byte reads from `../WoW.exe` (image base 0x400000, .text at RVA 0x1000)
+- `arg2` in Storm allocator calls (e.g., `0x00866650`) is a shared source-file tag, NOT unique to one allocation family. `arg3` is the Storm source line number.
+- Allocator comparison patches use same byte value but different x86 jump types (`ja` vs `jae`) at each site — verify with disassembly, not decompiler output
+- The decompiled output may reflect runtime-patched state if decompiled from a modified binary
 
 ## Code conventions
 
@@ -132,15 +141,19 @@ Deferred in `InitializeGlobal_h` (after game init is safe): `Texture::InstallCha
 - **Loader lock**: `CreateProcess` and thread creation are deferred to `InitializeGlobal_h`, never called from `DllMain` directly.
 - **Wine log flushing**: `TexBridge.log` flushed every ~60 frame ticks, not on every write. Immediate flush causes hitching under Wine.
 - **Texture lifecycle**: WoW recycles `HTEXTURE`/`CGxTex` objects. A destroy hook clears helper tracking and restores the managed binding before releasing D3DPOOL_DEFAULT textures.
+- **Hook-site probe**: `TexBridge::InstallHooks()` logs `HOOK_SITE` snapshots (pre-install, post-install, first live call) for `TextureGetGxTex`/`TextureCreate`/`TextureDestroy` to detect inline-hook conflicts (e.g., `libSiliconPatch.dll`). Startup-only cost; 9 log lines per run.
 - **Shared memory windowing**: 4 separate file mappings (not one large mapping) to avoid issues on older systems. Window = slot / 16, offset = (slot % 16) × SLOT_TOTAL.
 - **D3D9 format constants**: Hardcoded (e.g., `D3DFMT_A8R8G8B8 = 21`, `D3DFMT_DXT1 = 827611204`). Same values under native D3D9, DXVK, and D3DMetal.
 - **Offsets.h**: All addresses are WoW 1.12 specific. Version mismatch = crash. No runtime validation.
 - **Offset overrides**: Place `offsets.ini` next to the DLL with `KEY = 0xHEX` lines to override compiled-in defaults. See `offsets.ini.example`. Missing file is not an error.
 - **Init order**: `Offsets::LoadFromFile` and `Game::Init` must run before `MH_Initialize` — function pointers are nullptr until `Game::Init` binds them.
 - **Cross-process volatile**: `SlotHeader::state` and `ShmHeader::sequence` intentionally use `volatile` (not `std::atomic`) because `std::atomic` layout is implementation-defined across 32/64-bit compilers. Correctness relies on x86 TSO + `Interlocked*` at access sites.
+- **DLL-internal atomics**: `s_server_available` uses `std::atomic<bool>` (safe within one process/compiler). Cross-process shared memory fields still use `volatile` + `Interlocked*`.
 - **RAII handles server-only**: `WinHandle.h` is used only in TextureServer64. The DLL avoids RAII destructors for module-level handles because `DLL_PROCESS_DETACH` cleanup order is fragile.
 - **Log format**: `TexBridge.log` uses `[TexBridge] +ELAPSED TTID LEVEL message`. Server stdout uses `[TextureServer] +ELAPSED TTID INFO message`. Elapsed is ms since log start; TTID is thread ID mod 10000.
 - **Back-pressure**: Max 16 in-flight decodes, 128 MiB queued raw bytes. Requests dropped if exceeded.
+- **Storm temp buffers**: Storm file-read functions allocate and free temp buffers within the same call. Tracking maps (`s_pendingMain0573Payloads`) that record these allocations must be cleared when Storm frees normally via `TextureAllocFreePayload_h`, or the deferred early-release will double-free a stale address.
+- **Reconnect SHM race (accepted)**: `CloseSharedMemory()` nulls global pointers before unmapping and accessors snapshot bases locally, but a thread can still hold a stale snapshot when the unmap fires. Only reachable during server-crash reconnect. Full fix would require synchronizing hot-path slot access — judged worse than the rare failure mode.
 - **`heigth`**: Intentional — matches the WoW internal struct field name in `Game.h`.
 
 ## File toggles

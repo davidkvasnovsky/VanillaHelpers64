@@ -52,6 +52,10 @@ public:
     void FreeSlot(int32_t slot);
 
 private:
+    /// Try to reclaim a stale slot in the given state.  Returns the slot index
+    /// if one was reclaimed, or -1 if none were stale enough.
+    auto TryReclaimSlotInState(TexProto::SlotState target, DWORD leaseMs, DWORD now) -> int32_t;
+
     // Declaration order matters: views must appear AFTER their handles so that
     // the destructor (reverse order) unmaps views before closing handles.
     UniqueHandle<> m_hHeaderMapping;
